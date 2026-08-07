@@ -1,0 +1,548 @@
+<style>
+  :root {
+    --bg: var(--figma-color-bg, #ffffff);
+    --bg-secondary: var(--figma-color-bg-secondary, #f5f5f5);
+    --bg-hover: var(--figma-color-bg-hover, #f0f0f0);
+    --text: var(--figma-color-text, #1a1a1a);
+    --text-secondary: var(--figma-color-text-secondary, #7a7a7a);
+    --border: var(--figma-color-border, #e6e6e6);
+    --accent: var(--figma-color-bg-brand, #0d99ff);
+    --accent-text: var(--figma-color-text-onbrand, #ffffff);
+    --danger: var(--figma-color-text-danger, #e03e1a);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 11px;
+    color: var(--text);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+    user-select: none;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .panel { display: none; padding: 12px; }
+  .panel.active { display: block; }
+
+  .section { margin-bottom: 14px; }
+  .label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .hint { color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 11px;
+    font-family: inherit;
+  }
+  input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > div { flex: 1; }
+
+  .bp-grid {
+    display: grid;
+    grid-template-columns: 1fr 70px;
+    gap: 6px 8px;
+    align-items: center;
+  }
+  .bp-grid .head { color: var(--text-secondary); font-weight: 600; }
+
+  .checks { display: flex; flex-wrap: wrap; gap: 10px; }
+  .checks label { display: flex; align-items: center; gap: 4px; font-weight: 400; cursor: pointer; }
+
+  button {
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-weight: 500;
+  }
+  button:hover { background: var(--bg-hover); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.primary:hover { opacity: 0.9; }
+  button.ghost { background: transparent; }
+  button.small { padding: 4px 8px; font-size: 10px; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  .token {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+  }
+  .token-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .token-head input.name { font-weight: 600; }
+  .token-head .del { color: var(--danger); border: none; background: transparent; padding: 4px 6px; }
+
+  .token-meta { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; margin-bottom: 8px; }
+
+  .bp-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .bp-col { border: 1px solid var(--border); border-radius: 4px; padding: 6px; background: var(--bg); }
+  .bp-col .bp-name { font-weight: 600; margin-bottom: 4px; text-align: center; }
+  .bp-col .field { margin-bottom: 4px; }
+  .bp-col .field span { color: var(--text-secondary); display: block; margin-bottom: 2px; }
+  .bp-col input { padding: 4px 5px; }
+
+  .footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 10px 12px;
+    display: flex;
+    gap: 8px;
+  }
+  .footer button { flex: 1; }
+
+  .status { padding: 8px 12px; color: var(--text-secondary); min-height: 16px; }
+  .status.err { color: var(--danger); }
+
+  .mini { font-size: 10px; color: var(--text-secondary); }
+</style>
+
+<div class="tabs">
+  <div class="tab active" data-tab="generate">Generate</div>
+  <div class="tab" data-tab="apply">Apply modes</div>
+  <div class="tab" data-tab="settings">Settings</div>
+</div>
+
+<!-- ============================ GENERATE ============================ -->
+<div class="panel active" id="panel-generate">
+  <div class="section">
+    <div class="toolbar">
+      <button class="small" id="btn-default">Load default scale</button>
+      <button class="small" id="btn-import">Import text styles</button>
+      <button class="small" id="btn-autofill">Auto-fill T/M from Desktop</button>
+      <button class="small ghost" id="btn-add">+ Add token</button>
+    </div>
+    <div class="mini">Each token becomes grouped variables (e.g. <code>heading/h1/fontSize</code>) with one value per breakpoint mode.</div>
+  </div>
+
+  <div id="tokens"></div>
+</div>
+
+<!-- ============================ APPLY ============================ -->
+<div class="panel" id="panel-apply">
+  <div class="section">
+    <div class="label">Apply breakpoint mode by frame width</div>
+    <div class="hint">
+      Select one or more frames on the canvas, then click below. Each frame gets the
+      Typography collection mode whose breakpoint width best matches the frame's actual width.
+      A 375px frame becomes Mobile, a 1440px frame becomes Desktop, etc.
+    </div>
+  </div>
+  <button class="primary" id="btn-apply" style="width:100%">Apply mode to selected frames</button>
+  <div class="status" id="apply-status"></div>
+</div>
+
+<!-- ============================ SETTINGS ============================ -->
+<div class="panel" id="panel-settings">
+  <div class="section">
+    <label class="label">Collection name</label>
+    <input type="text" id="collection-name" value="Typography" />
+  </div>
+
+  <div class="section">
+    <label class="label">Breakpoints (modes)</label>
+    <div class="bp-grid" id="bp-grid">
+      <div class="head">Name</div><div class="head">Min width</div>
+    </div>
+    <div class="hint">Width is the lower bound (px) used when applying modes by frame size.</div>
+  </div>
+
+  <div class="section">
+    <label class="label">Properties to generate</label>
+    <div class="checks" id="prop-checks">
+      <label><input type="checkbox" value="fontFamily" checked> Font family</label>
+      <label><input type="checkbox" value="fontWeight" checked> Font weight</label>
+      <label><input type="checkbox" value="fontSize" checked> Font size</label>
+      <label><input type="checkbox" value="lineHeight" checked> Line height</label>
+      <label><input type="checkbox" value="letterSpacing" checked> Letter spacing</label>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="label">Auto-scale factors</label>
+    <div class="row">
+      <div>
+        <span class="mini">Tablet ×</span>
+        <input type="number" id="scale-tablet" value="0.9" step="0.05" min="0.1" />
+      </div>
+      <div>
+        <span class="mini">Mobile ×</span>
+        <input type="number" id="scale-mobile" value="0.8" step="0.05" min="0.1" />
+      </div>
+      <div>
+        <span class="mini">Round decimals</span>
+        <input type="number" id="decimals" value="2" step="1" min="0" max="4" />
+      </div>
+    </div>
+    <div class="hint">Used by "Auto-fill T/M from Desktop" for size, line height &amp; letter spacing.</div>
+  </div>
+</div>
+
+<div class="status" id="status"></div>
+<div class="footer">
+  <button class="ghost" id="btn-close">Close</button>
+  <button class="primary" id="btn-create">Create / update variables</button>
+</div>
+
+<script>
+  // -------------------------------------------------------------------------
+  // Breakpoint model. Order matters: widest first.
+  // -------------------------------------------------------------------------
+  var BREAKPOINTS = [
+    { key: 'desktop', name: 'Desktop', width: 1440 },
+    { key: 'tablet', name: 'Tablet', width: 768 },
+    { key: 'mobile', name: 'Mobile', width: 375 }
+  ];
+
+  // Default responsive type scale (desktop values; T/M auto-derived).
+  var DEFAULT_SCALE = [
+    { name: 'display', family: 'Inter', weight: 700, size: 57, lh: 64, ls: -0.25 },
+    { name: 'heading/h1', family: 'Inter', weight: 700, size: 40, lh: 48, ls: -0.5 },
+    { name: 'heading/h2', family: 'Inter', weight: 700, size: 32, lh: 40, ls: -0.25 },
+    { name: 'heading/h3', family: 'Inter', weight: 700, size: 28, lh: 36, ls: 0 },
+    { name: 'heading/h4', family: 'Inter', weight: 600, size: 24, lh: 32, ls: 0 },
+    { name: 'heading/h5', family: 'Inter', weight: 600, size: 20, lh: 28, ls: 0 },
+    { name: 'heading/h6', family: 'Inter', weight: 600, size: 18, lh: 26, ls: 0 },
+    { name: 'body/large', family: 'Inter', weight: 400, size: 18, lh: 28, ls: 0 },
+    { name: 'body/base', family: 'Inter', weight: 400, size: 16, lh: 24, ls: 0 },
+    { name: 'body/small', family: 'Inter', weight: 400, size: 14, lh: 20, ls: 0 },
+    { name: 'caption', family: 'Inter', weight: 400, size: 12, lh: 16, ls: 0.25 },
+    { name: 'overline', family: 'Inter', weight: 500, size: 11, lh: 16, ls: 0.5 }
+  ];
+
+  var tokens = []; // working set of token objects
+
+  // ---- helpers -----------------------------------------------------------
+  function num(v, fallback) {
+    var n = parseFloat(v);
+    return isNaN(n) ? fallback : n;
+  }
+  function scaleFactors() {
+    return {
+      desktop: 1,
+      tablet: num(document.getElementById('scale-tablet').value, 0.9),
+      mobile: num(document.getElementById('scale-mobile').value, 0.8)
+    };
+  }
+  function decimals() { return num(document.getElementById('decimals').value, 2); }
+  function roundTo(v, d) { var f = Math.pow(10, d); return Math.round(v * f) / f; }
+
+  // Build a full token (all breakpoints) from a flat desktop definition.
+  function tokenFromDesktop(def) {
+    var f = scaleFactors();
+    var d = decimals();
+    var values = {};
+    BREAKPOINTS.forEach(function (bp) {
+      var k = f[bp.key];
+      values[bp.key] = {
+        fontFamily: def.family,
+        fontWeight: def.weight,
+        fontSize: roundTo(def.size * k, d),
+        lineHeight: roundTo(def.lh * k, d),
+        letterSpacing: roundTo(def.ls * k, d)
+      };
+    });
+    return { name: def.name, values: values };
+  }
+
+  function emptyToken() {
+    var values = {};
+    BREAKPOINTS.forEach(function (bp) {
+      values[bp.key] = { fontFamily: 'Inter', fontWeight: 400, fontSize: 16, lineHeight: 24, letterSpacing: 0 };
+    });
+    return { name: 'new/token', values: values };
+  }
+
+  // ---- rendering ---------------------------------------------------------
+  function render() {
+    var container = document.getElementById('tokens');
+    container.innerHTML = '';
+    tokens.forEach(function (token, i) {
+      container.appendChild(renderToken(token, i));
+    });
+  }
+
+  function renderToken(token, index) {
+    var wrap = document.createElement('div');
+    wrap.className = 'token';
+
+    var head = document.createElement('div');
+    head.className = 'token-head';
+    var name = inputEl('text', token.name, function (v) { token.name = v; });
+    name.className = 'name';
+    name.style.flex = '1';
+    var del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.title = 'Remove token';
+    del.onclick = function () { tokens.splice(index, 1); render(); };
+    head.appendChild(name);
+    head.appendChild(del);
+    wrap.appendChild(head);
+
+    // Family + weight are shared visually but stored per-breakpoint; editing
+    // here writes to all breakpoints at once (they rarely differ).
+    var meta = document.createElement('div');
+    meta.className = 'token-meta';
+    var famInput = inputEl('text', token.values[BREAKPOINTS[0].key].fontFamily, function (v) {
+      BREAKPOINTS.forEach(function (bp) { token.values[bp.key].fontFamily = v; });
+    });
+    famInput.placeholder = 'Font family';
+    var weightInput = inputEl('number', token.values[BREAKPOINTS[0].key].fontWeight, function (v) {
+      BREAKPOINTS.forEach(function (bp) { token.values[bp.key].fontWeight = num(v, 400); });
+    });
+    weightInput.placeholder = 'Weight';
+    meta.appendChild(labeled('Family', famInput));
+    meta.appendChild(labeled('Weight', weightInput));
+    wrap.appendChild(meta);
+
+    // Per-breakpoint size / line-height / letter-spacing.
+    var cols = document.createElement('div');
+    cols.className = 'bp-cols';
+    BREAKPOINTS.forEach(function (bp) {
+      var col = document.createElement('div');
+      col.className = 'bp-col';
+      var title = document.createElement('div');
+      title.className = 'bp-name';
+      title.textContent = bp.name;
+      col.appendChild(title);
+
+      col.appendChild(field('Size', token.values[bp.key].fontSize, function (v) {
+        token.values[bp.key].fontSize = num(v, 0);
+      }));
+      col.appendChild(field('Line', token.values[bp.key].lineHeight, function (v) {
+        token.values[bp.key].lineHeight = num(v, 0);
+      }));
+      col.appendChild(field('Letter', token.values[bp.key].letterSpacing, function (v) {
+        token.values[bp.key].letterSpacing = num(v, 0);
+      }));
+      cols.appendChild(col);
+    });
+    wrap.appendChild(cols);
+
+    return wrap;
+  }
+
+  function field(label, value, onChange) {
+    var div = document.createElement('div');
+    div.className = 'field';
+    var span = document.createElement('span');
+    span.textContent = label;
+    div.appendChild(span);
+    div.appendChild(inputEl('number', value, onChange));
+    return div;
+  }
+
+  function labeled(label, input) {
+    var div = document.createElement('div');
+    var span = document.createElement('div');
+    span.className = 'mini';
+    span.textContent = label;
+    div.appendChild(span);
+    div.appendChild(input);
+    return div;
+  }
+
+  function inputEl(type, value, onChange) {
+    var input = document.createElement('input');
+    input.type = type;
+    input.value = value;
+    if (type === 'number') input.step = 'any';
+    input.oninput = function () { onChange(input.value); };
+    return input;
+  }
+
+  // ---- settings: breakpoint editor --------------------------------------
+  function renderBreakpoints() {
+    var grid = document.getElementById('bp-grid');
+    grid.innerHTML = '<div class="head">Name</div><div class="head">Min width</div>';
+    BREAKPOINTS.forEach(function (bp) {
+      var nameInput = inputEl('text', bp.name, function (v) { bp.name = v; });
+      var widthInput = inputEl('number', bp.width, function (v) { bp.width = num(v, 0); });
+      grid.appendChild(nameInput);
+      grid.appendChild(widthInput);
+    });
+  }
+
+  // ---- actions -----------------------------------------------------------
+  function loadDefault() {
+    tokens = DEFAULT_SCALE.map(tokenFromDesktop);
+    render();
+    setStatus('Loaded default type scale (' + tokens.length + ' tokens).');
+  }
+
+  function autofill() {
+    var f = scaleFactors();
+    var d = decimals();
+    tokens.forEach(function (token) {
+      var base = token.values[BREAKPOINTS[0].key];
+      BREAKPOINTS.forEach(function (bp) {
+        var k = f[bp.key];
+        token.values[bp.key] = {
+          fontFamily: base.fontFamily,
+          fontWeight: base.fontWeight,
+          fontSize: roundTo(base.fontSize * k, d),
+          lineHeight: roundTo(base.lineHeight * k, d),
+          letterSpacing: roundTo(base.letterSpacing * k, d)
+        };
+      });
+    });
+    render();
+    setStatus('Filled Tablet/Mobile from Desktop values.');
+  }
+
+  function enabledProps() {
+    var out = {};
+    var boxes = document.querySelectorAll('#prop-checks input[type="checkbox"]');
+    boxes.forEach(function (b) { out[b.value] = b.checked; });
+    return out;
+  }
+
+  function collectionName() {
+    return document.getElementById('collection-name').value.trim() || 'Typography';
+  }
+
+  function create() {
+    if (tokens.length === 0) {
+      setStatus('Add at least one token (or load the default scale).', true);
+      return;
+    }
+    parent.postMessage({ pluginMessage: {
+      type: 'create-variables',
+      payload: {
+        collectionName: collectionName(),
+        modes: BREAKPOINTS,
+        tokens: tokens,
+        properties: enabledProps(),
+        decimals: decimals()
+      }
+    } }, '*');
+    setStatus('Creating variables…');
+  }
+
+  function applyModes() {
+    parent.postMessage({ pluginMessage: {
+      type: 'apply-modes',
+      payload: { collectionName: collectionName(), modes: BREAKPOINTS }
+    } }, '*');
+    document.getElementById('apply-status').textContent = 'Applying…';
+  }
+
+  function setStatus(text, isErr) {
+    var el = document.getElementById('status');
+    el.textContent = text;
+    el.className = isErr ? 'status err' : 'status';
+  }
+
+  // ---- wiring ------------------------------------------------------------
+  document.querySelectorAll('.tab').forEach(function (tab) {
+    tab.onclick = function () {
+      document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    };
+  });
+
+  document.getElementById('btn-default').onclick = loadDefault;
+  document.getElementById('btn-autofill').onclick = autofill;
+  document.getElementById('btn-add').onclick = function () { tokens.push(emptyToken()); render(); };
+  document.getElementById('btn-import').onclick = function () {
+    parent.postMessage({ pluginMessage: { type: 'import-styles' } }, '*');
+    setStatus('Importing text styles…');
+  };
+  document.getElementById('btn-create').onclick = create;
+  document.getElementById('btn-apply').onclick = applyModes;
+  document.getElementById('btn-close').onclick = function () {
+    parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
+  };
+
+  // ---- messages from the plugin main thread ------------------------------
+  onmessage = function (event) {
+    var msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === 'create-done') {
+      var r = msg.result;
+      var text = 'Done — ' + r.created + ' created, ' + r.updated + ' updated in "' + r.collectionName + '".';
+      if (r.modeWarnings && r.modeWarnings.length) {
+        text += ' Note: modes ' + r.modeWarnings.join(', ') + ' need a paid plan.';
+      }
+      setStatus(text, r.modeWarnings && r.modeWarnings.length);
+    }
+
+    if (msg.type === 'import-done') {
+      if (msg.tokens.length === 0) {
+        setStatus('No local text styles found in this file.', true);
+        return;
+      }
+      tokens = msg.tokens.map(function (t) {
+        return tokenFromDesktop({
+          name: t.name, family: t.fontFamily, weight: t.fontWeight,
+          size: t.fontSize, lh: t.lineHeight, ls: t.letterSpacing
+        });
+      });
+      render();
+      setStatus('Imported ' + msg.tokens.length + ' text style(s). Tablet/Mobile auto-scaled — adjust as needed.');
+    }
+
+    if (msg.type === 'apply-done') {
+      var el = document.getElementById('apply-status');
+      if (msg.result.error) {
+        el.textContent = msg.result.error;
+        el.className = 'status err';
+      } else {
+        el.className = 'status';
+        el.innerHTML = 'Applied to ' + msg.result.applied + ' frame(s):<br>' +
+          (msg.result.details || []).join('<br>');
+      }
+    }
+
+    if (msg.type === 'error') {
+      setStatus('Error: ' + msg.message, true);
+    }
+  };
+
+  // ---- init --------------------------------------------------------------
+  renderBreakpoints();
+  loadDefault();
+</script>

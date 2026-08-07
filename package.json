@@ -1,0 +1,13 @@
+{
+  "name": "typography-breakpoint-variables",
+  "version": "1.0.0",
+  "description": "Figma plugin that generates typography variables with a mode per breakpoint (Desktop / Tablet / Mobile).",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.100.0",
+    "typescript": "^5.5.0"
+  }
+}
