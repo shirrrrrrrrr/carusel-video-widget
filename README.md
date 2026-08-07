@@ -1,82 +1,91 @@
-# Typography Breakpoint Variables — Figma plugin
+# Responsive Breakpoint Variables — Figma plugin
 
-A Figma plugin that turns a typographic scale into **Variables** with one
-**mode per breakpoint** (Desktop / Tablet / Mobile). Each token becomes a set
-of grouped variables, and every breakpoint gets its own responsive value — so a
-frame switched to the Mobile mode instantly picks up the mobile type sizes.
+A Figma plugin that turns your design system into **Variables** with one
+**mode per breakpoint** (Desktop / Tablet / Mobile) — for both **typography**
+_and_ **layout** (size, padding, gap, corner radius). Bind any element's fields
+to those variables, then switch a frame's mode and everything reflows.
 
 <div dir="rtl">
 
 ## מה זה עושה
 
-הפלאגין יוצר **Variable Collection** לטיפוגרפיה עם **mode לכל נקודת שבירה**
-(דסקטופ / טאבלט / מובייל). כל טוקן (למשל `heading/h1`) הופך לקבוצת variables —
-`fontSize`, `lineHeight`, `letterSpacing`, `fontWeight`, `fontFamily` — כשלכל
-breakpoint יש ערך משלו. כשמחליפים את ה-mode של פריים לפי הרוחב שלו, הטיפוגרפיה
-מתעדכנת אוטומטית.
+הפלאגין יוצר **Variable Collections** רספונסיביים עם **mode לכל נקודת שבירה**
+(דסקטופ / טאבלט / מובייל):
+
+- **Typography** — לכל טוקן: `fontSize`, `lineHeight`, `letterSpacing`, משקל ופונט.
+- **Layout** — טוקנים של רוחב/גובה, padding, gap ורדיוס פינות.
+
+בטאב **Bind** מחברים כל אלמנט שנבחר לשדה (רוחב, גובה, padding, gap, רדיוס) ל-variable.
+כשמחליפים את ה-mode של הפריים לפי הרוחב שלו — הטיפוגרפיה **וגם** המידות מתעדכנות אוטומטית.
+
+> **align (יישור):** ב-Figma זו תכונת enum ולא ניתן לקשר אותה ל-variable. הפלאגין
+> מיישם align ישירות על ה-auto-layout שנבחר, אבל הוא **לא** מתחלף אוטומטית עם ה-mode.
 
 </div>
 
-## Features
+## Tabs
 
-- **Responsive type scale** — edit a table of tokens with separate values for
-  Desktop, Tablet and Mobile.
-- **Auto-fill** — fill Tablet/Mobile from the Desktop values using scale factors
-  (defaults: tablet ×0.9, mobile ×0.8).
-- **Import from text styles** — pull your existing local text styles in as tokens.
-- **Apply modes by frame width** — select frames and the plugin assigns each the
-  matching breakpoint mode based on its actual width (e.g. 375px → Mobile).
-- **Idempotent** — re-running updates existing variables instead of duplicating.
+### Type
+Editable responsive type scale (H1–H6, body, caption, …). Each token becomes
+grouped variables like `heading/h1/fontSize`, with a value per breakpoint.
+- **Load default scale**, **Import text styles**, **Auto-fill T/M** (from Desktop
+  via scale factors), **+ Add token**.
 
-## What gets created
+### Layout
+Spacing / sizing / radius scalars — one FLOAT variable per token
+(`space/md`, `radius/lg`, `size/container`, …), one value per breakpoint.
 
-For a token `heading/h1` you get variables:
-
-```
-Typography (collection)
-├─ modes: Desktop · Tablet · Mobile
-├─ heading/h1/fontFamily   (STRING)
-├─ heading/h1/fontWeight   (FLOAT)
-├─ heading/h1/fontSize     (FLOAT)   Desktop 40 · Tablet 36 · Mobile 32
-├─ heading/h1/lineHeight   (FLOAT)   Desktop 48 · Tablet 43.2 · Mobile 38.4
-└─ heading/h1/letterSpacing(FLOAT)
-```
-
-Each variable has the correct binding **scope** (font size, line height, etc.),
-so Figma offers it in the right place when you bind text properties.
-
-## How to use
-
-1. **Load the plugin** in Figma:
-   - `Menu → Plugins → Development → Import plugin from manifest…`
-   - Pick `manifest.json` from this folder.
-2. **Generate tab** — click *Load default scale* (or *Import text styles*), tweak
-   values, then **Create / update variables**.
-3. In your text layers, bind font size / line height / letter spacing to the new
-   variables (right-click the property → *Apply variable*).
-4. Put each responsive layout in its own frame. On the **Apply modes** tab, select
-   the frames and click *Apply mode to selected frames* — or set the mode manually
-   from the frame's right-panel Variables section.
+### Bind
+1. **Apply mode by frame width** — select frames; each gets the breakpoint mode
+   matching its width, on **both** collections at once (375px → Mobile, 1440px → Desktop).
+2. **Bind element field → variable** — select elements, pick a field
+   (width, height, min/max, padding per-side or all, gap, corner radius per-corner
+   or all) and a variable, then bind. Padding/gap require an auto-layout frame.
+3. **Alignment** — set horizontal/vertical alignment on selected auto-layout frames
+   (applied directly; see note above).
 
 ### Settings
+Collection names, breakpoint names + min widths, which typography properties to
+generate, auto-scale factors and rounding.
 
-- **Collection name**, **breakpoint names + min widths**.
-- **Which properties** to generate.
-- **Scale factors** for auto-fill and **rounding** decimals.
+## Which fields can bind to variables?
+
+| Field | Bindable? | Notes |
+|-------|-----------|-------|
+| Width / Height | ✅ | Also min/max width & height |
+| Padding (all sides) | ✅ | Requires auto-layout |
+| Gap (item spacing) | ✅ | Requires auto-layout |
+| Corner radius (per corner) | ✅ | |
+| Font size / line height / letter spacing | ✅ | On text layers |
+| **Alignment** | ❌ | Enum — not variable-bindable in Figma; applied directly |
+
+## Typical workflow
+
+1. **Type** → *Load default scale* → tweak → *Create / update typography variables*.
+2. **Layout** → *Load defaults* → tweak → *Create / update layout variables*.
+3. In text layers, bind size/line-height to the type variables (right-click →
+   *Apply variable*), or use the **Bind** tab for layout fields on any element.
+4. Put each responsive layout in its own frame. **Bind → Apply mode by frame width**
+   assigns the correct mode; switching modes reflows type + layout together.
+
+## How to load
+
+`Menu → Plugins → Development → Import plugin from manifest…` and pick
+`manifest.json` from this folder.
 
 ## Notes
 
-- **Multiple variable modes require a paid Figma plan** (Professional or above).
-  On a free plan the first breakpoint is created and the extra modes are skipped
-  with a warning.
-- No build step — the plugin ships as plain `code.js` + `ui.html`. For editor
-  type-checking run `npm install` then `npm run typecheck`.
+- **Multiple variable modes require a paid Figma plan** (Professional+). On a free
+  plan the first breakpoint is created and extra modes are skipped with a warning.
+- Re-running is **idempotent** — existing variables are updated, not duplicated.
+- No build step — plain `code.js` + `ui.html`. For editor type-checking:
+  `npm install && npm run typecheck`.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `manifest.json` | Plugin manifest |
-| `code.js` | Main thread (sandbox): variable/mode creation, import, apply-modes |
+| `code.js` | Main thread: variable/mode creation, import, bind, apply-modes, alignment |
 | `ui.html` | Plugin UI and interaction logic |
 | `package.json` / `tsconfig.json` | Optional dev tooling (Figma typings) |

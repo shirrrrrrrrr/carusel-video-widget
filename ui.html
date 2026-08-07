@@ -10,108 +10,56 @@
     --accent-text: var(--figma-color-text-onbrand, #ffffff);
     --danger: var(--figma-color-text-danger, #e03e1a);
   }
-
   * { box-sizing: border-box; }
-
   body {
     font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 11px;
-    color: var(--text);
-    background: var(--bg);
-    margin: 0;
-    padding: 0;
+    font-size: 11px; color: var(--text); background: var(--bg); margin: 0;
   }
 
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-    z-index: 10;
-  }
-  .tab {
-    flex: 1;
-    padding: 10px 8px;
-    text-align: center;
-    cursor: pointer;
-    color: var(--text-secondary);
-    border-bottom: 2px solid transparent;
-    font-weight: 500;
-    user-select: none;
-  }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  .tab { flex: 1; padding: 10px 6px; text-align: center; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; font-weight: 500; user-select: none; }
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
 
   .panel { display: none; padding: 12px; }
   .panel.active { display: block; }
 
   .section { margin-bottom: 14px; }
-  .label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--text);
-  }
+  .label { display: block; font-weight: 600; margin-bottom: 6px; }
   .hint { color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
+  .mini { font-size: 10px; color: var(--text-secondary); }
 
-  input[type="text"], input[type="number"] {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 11px;
-    font-family: inherit;
+  input[type="text"], input[type="number"], select {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); color: var(--text); font-size: 11px; font-family: inherit;
   }
-  input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 
   .row { display: flex; gap: 8px; align-items: flex-end; }
   .row > div { flex: 1; }
 
-  .bp-grid {
-    display: grid;
-    grid-template-columns: 1fr 70px;
-    gap: 6px 8px;
-    align-items: center;
-  }
+  .bp-grid { display: grid; grid-template-columns: 1fr 70px; gap: 6px 8px; align-items: center; }
   .bp-grid .head { color: var(--text-secondary); font-weight: 600; }
 
   .checks { display: flex; flex-wrap: wrap; gap: 10px; }
   .checks label { display: flex; align-items: center; gap: 4px; font-weight: 400; cursor: pointer; }
 
   button {
-    font-family: inherit;
-    font-size: 11px;
-    border-radius: 6px;
-    padding: 8px 12px;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-    font-weight: 500;
+    font-family: inherit; font-size: 11px; border-radius: 6px; padding: 8px 12px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: 500;
   }
   button:hover { background: var(--bg-hover); }
   button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   button.primary:hover { opacity: 0.9; }
   button.ghost { background: transparent; }
   button.small { padding: 4px 8px; font-size: 10px; }
+  button.full { width: 100%; }
 
   .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 
-  .token {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px;
-    margin-bottom: 8px;
-    background: var(--bg-secondary);
-  }
+  .token { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 8px; background: var(--bg-secondary); }
   .token-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
-  .token-head input.name { font-weight: 600; }
   .token-head .del { color: var(--danger); border: none; background: transparent; padding: 4px 6px; }
-
   .token-meta { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; margin-bottom: 8px; }
-
   .bp-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .bp-col { border: 1px solid var(--border); border-radius: 4px; padding: 6px; background: var(--bg); }
   .bp-col .bp-name { font-weight: 600; margin-bottom: 4px; text-align: center; }
@@ -119,79 +67,172 @@
   .bp-col .field span { color: var(--text-secondary); display: block; margin-bottom: 2px; }
   .bp-col input { padding: 4px 5px; }
 
-  .footer {
-    position: sticky;
-    bottom: 0;
-    background: var(--bg);
-    border-top: 1px solid var(--border);
-    padding: 10px 12px;
-    display: flex;
-    gap: 8px;
-  }
-  .footer button { flex: 1; }
+  .lay-token { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; background: var(--bg-secondary); }
+  .lay-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .lay-head .name { flex: 2; }
+  .lay-head .group { flex: 1; }
+  .lay-bps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .lay-bps .cell span { display: block; color: var(--text-secondary); margin-bottom: 2px; text-align: center; }
 
-  .status { padding: 8px 12px; color: var(--text-secondary); min-height: 16px; }
+  .card { border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+  .card .label { margin-bottom: 8px; }
+
+  .footer { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 10px 12px; display: flex; gap: 8px; }
+  .status { padding: 4px 0; color: var(--text-secondary); min-height: 14px; line-height: 1.4; }
   .status.err { color: var(--danger); }
-
-  .mini { font-size: 10px; color: var(--text-secondary); }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
 </style>
 
 <div class="tabs">
-  <div class="tab active" data-tab="generate">Generate</div>
-  <div class="tab" data-tab="apply">Apply modes</div>
+  <div class="tab active" data-tab="type">Type</div>
+  <div class="tab" data-tab="layout">Layout</div>
+  <div class="tab" data-tab="bind">Bind</div>
   <div class="tab" data-tab="settings">Settings</div>
 </div>
 
-<!-- ============================ GENERATE ============================ -->
-<div class="panel active" id="panel-generate">
+<!-- ============================ TYPE ============================ -->
+<div class="panel active" id="panel-type">
   <div class="section">
     <div class="toolbar">
       <button class="small" id="btn-default">Load default scale</button>
       <button class="small" id="btn-import">Import text styles</button>
-      <button class="small" id="btn-autofill">Auto-fill T/M from Desktop</button>
+      <button class="small" id="btn-autofill">Auto-fill T/M</button>
       <button class="small ghost" id="btn-add">+ Add token</button>
     </div>
-    <div class="mini">Each token becomes grouped variables (e.g. <code>heading/h1/fontSize</code>) with one value per breakpoint mode.</div>
+    <div class="mini">Each token → grouped variables (e.g. <code>heading/h1/fontSize</code>), one value per breakpoint mode.</div>
   </div>
-
   <div id="tokens"></div>
+  <button class="primary full" id="btn-create-type">Create / update typography variables</button>
+  <div class="status" id="type-status"></div>
 </div>
 
-<!-- ============================ APPLY ============================ -->
-<div class="panel" id="panel-apply">
+<!-- ============================ LAYOUT ============================ -->
+<div class="panel" id="panel-layout">
   <div class="section">
-    <div class="label">Apply breakpoint mode by frame width</div>
-    <div class="hint">
-      Select one or more frames on the canvas, then click below. Each frame gets the
-      Typography collection mode whose breakpoint width best matches the frame's actual width.
-      A 375px frame becomes Mobile, a 1440px frame becomes Desktop, etc.
+    <div class="toolbar">
+      <button class="small" id="btn-lay-default">Load defaults</button>
+      <button class="small" id="btn-lay-autofill">Auto-fill T/M</button>
+      <button class="small ghost" id="btn-lay-add">+ Add token</button>
     </div>
+    <div class="mini">Spacing, sizing &amp; radius scalars — one FLOAT variable per token, one value per breakpoint. Bind elements to these on the <b>Bind</b> tab.</div>
   </div>
-  <button class="primary" id="btn-apply" style="width:100%">Apply mode to selected frames</button>
-  <div class="status" id="apply-status"></div>
+  <div id="lay-tokens"></div>
+  <button class="primary full" id="btn-create-layout">Create / update layout variables</button>
+  <div class="status" id="layout-status"></div>
+</div>
+
+<!-- ============================ BIND ============================ -->
+<div class="panel" id="panel-bind">
+  <div class="card">
+    <div class="label">1 · Apply mode by frame width</div>
+    <div class="hint">Select frames, then assign each the breakpoint mode matching its width (both Typography &amp; Layout collections).</div>
+    <button class="primary full" id="btn-apply" style="margin-top:8px">Apply mode to selected frames</button>
+    <div class="status" id="apply-status"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">2 · Bind element field → variable</div>
+    <div class="hint">Select elements, pick a field and a variable, then bind. When the frame's mode changes, the value follows.</div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <span class="mini">Collection</span>
+        <select id="bind-collection"></select>
+      </div>
+      <div>
+        <span class="mini">Field</span>
+        <select id="bind-field">
+          <optgroup label="Size">
+            <option value="width">Width</option>
+            <option value="height">Height</option>
+            <option value="minWidth">Min width</option>
+            <option value="maxWidth">Max width</option>
+            <option value="minHeight">Min height</option>
+            <option value="maxHeight">Max height</option>
+          </optgroup>
+          <optgroup label="Padding (auto-layout)">
+            <option value="paddingAll">Padding · all</option>
+            <option value="paddingTop">Padding · top</option>
+            <option value="paddingRight">Padding · right</option>
+            <option value="paddingBottom">Padding · bottom</option>
+            <option value="paddingLeft">Padding · left</option>
+            <option value="gap">Gap (item spacing)</option>
+          </optgroup>
+          <optgroup label="Corner radius">
+            <option value="radiusAll">Radius · all</option>
+            <option value="radiusTopLeft">Radius · top-left</option>
+            <option value="radiusTopRight">Radius · top-right</option>
+            <option value="radiusBottomRight">Radius · bottom-right</option>
+            <option value="radiusBottomLeft">Radius · bottom-left</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:3">
+        <span class="mini">Variable</span>
+        <select id="bind-variable"></select>
+      </div>
+      <div style="flex:0 0 auto; align-self:flex-end">
+        <button class="small" id="btn-refresh-vars">↻</button>
+      </div>
+    </div>
+    <button class="primary full" id="btn-bind" style="margin-top:8px">Bind to selected elements</button>
+    <div class="status" id="bind-status"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">3 · Alignment <span class="mini">(applied directly)</span></div>
+    <div class="hint">⚠️ Alignment can't be a Figma variable (it's an enum), so this is applied directly to selected auto-layout frames and won't switch with modes.</div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <span class="mini">Horizontal</span>
+        <select id="align-primary">
+          <option value="">— keep —</option>
+          <option value="MIN">Left / start</option>
+          <option value="CENTER">Center</option>
+          <option value="MAX">Right / end</option>
+          <option value="SPACE_BETWEEN">Space between</option>
+        </select>
+      </div>
+      <div>
+        <span class="mini">Vertical</span>
+        <select id="align-counter">
+          <option value="">— keep —</option>
+          <option value="MIN">Top</option>
+          <option value="CENTER">Middle</option>
+          <option value="MAX">Bottom</option>
+          <option value="BASELINE">Baseline</option>
+        </select>
+      </div>
+    </div>
+    <button class="full" id="btn-align" style="margin-top:8px">Apply alignment to selection</button>
+    <div class="status" id="align-status"></div>
+    <div class="mini" style="margin-top:6px">Note: on a horizontal auto-layout, "Horizontal" is the main axis and "Vertical" the cross axis (and vice-versa).</div>
+  </div>
 </div>
 
 <!-- ============================ SETTINGS ============================ -->
 <div class="panel" id="panel-settings">
   <div class="section">
-    <label class="label">Collection name</label>
-    <input type="text" id="collection-name" value="Typography" />
+    <label class="label">Collection names</label>
+    <div class="row">
+      <div><span class="mini">Typography</span><input type="text" id="collection-name" value="Typography" /></div>
+      <div><span class="mini">Layout</span><input type="text" id="layout-collection-name" value="Layout" /></div>
+    </div>
   </div>
 
   <div class="section">
     <label class="label">Breakpoints (modes)</label>
-    <div class="bp-grid" id="bp-grid">
-      <div class="head">Name</div><div class="head">Min width</div>
-    </div>
+    <div class="bp-grid" id="bp-grid"><div class="head">Name</div><div class="head">Min width</div></div>
     <div class="hint">Width is the lower bound (px) used when applying modes by frame size.</div>
   </div>
 
   <div class="section">
-    <label class="label">Properties to generate</label>
+    <label class="label">Typography properties</label>
     <div class="checks" id="prop-checks">
-      <label><input type="checkbox" value="fontFamily" checked> Font family</label>
-      <label><input type="checkbox" value="fontWeight" checked> Font weight</label>
-      <label><input type="checkbox" value="fontSize" checked> Font size</label>
+      <label><input type="checkbox" value="fontFamily" checked> Family</label>
+      <label><input type="checkbox" value="fontWeight" checked> Weight</label>
+      <label><input type="checkbox" value="fontSize" checked> Size</label>
       <label><input type="checkbox" value="lineHeight" checked> Line height</label>
       <label><input type="checkbox" value="letterSpacing" checked> Letter spacing</label>
     </div>
@@ -200,32 +241,19 @@
   <div class="section">
     <label class="label">Auto-scale factors</label>
     <div class="row">
-      <div>
-        <span class="mini">Tablet ×</span>
-        <input type="number" id="scale-tablet" value="0.9" step="0.05" min="0.1" />
-      </div>
-      <div>
-        <span class="mini">Mobile ×</span>
-        <input type="number" id="scale-mobile" value="0.8" step="0.05" min="0.1" />
-      </div>
-      <div>
-        <span class="mini">Round decimals</span>
-        <input type="number" id="decimals" value="2" step="1" min="0" max="4" />
-      </div>
+      <div><span class="mini">Tablet ×</span><input type="number" id="scale-tablet" value="0.9" step="0.05" min="0.1" /></div>
+      <div><span class="mini">Mobile ×</span><input type="number" id="scale-mobile" value="0.8" step="0.05" min="0.1" /></div>
+      <div><span class="mini">Round decimals</span><input type="number" id="decimals" value="2" step="1" min="0" max="4" /></div>
     </div>
-    <div class="hint">Used by "Auto-fill T/M from Desktop" for size, line height &amp; letter spacing.</div>
+    <div class="hint">Used by both "Auto-fill T/M" buttons (Type &amp; Layout).</div>
   </div>
 </div>
 
-<div class="status" id="status"></div>
 <div class="footer">
-  <button class="ghost" id="btn-close">Close</button>
-  <button class="primary" id="btn-create">Create / update variables</button>
+  <button class="ghost full" id="btn-close">Close</button>
 </div>
 
 <script>
-  // -------------------------------------------------------------------------
-  // Breakpoint model. Order matters: widest first.
   // -------------------------------------------------------------------------
   var BREAKPOINTS = [
     { key: 'desktop', name: 'Desktop', width: 1440 },
@@ -233,7 +261,6 @@
     { key: 'mobile', name: 'Mobile', width: 375 }
   ];
 
-  // Default responsive type scale (desktop values; T/M auto-derived).
   var DEFAULT_SCALE = [
     { name: 'display', family: 'Inter', weight: 700, size: 57, lh: 64, ls: -0.25 },
     { name: 'heading/h1', family: 'Inter', weight: 700, size: 40, lh: 48, ls: -0.5 },
@@ -249,13 +276,29 @@
     { name: 'overline', family: 'Inter', weight: 500, size: 11, lh: 16, ls: 0.5 }
   ];
 
-  var tokens = []; // working set of token objects
+  var DEFAULT_LAYOUT = [
+    { name: 'space/2xs', group: 'spacing', v: 4 },
+    { name: 'space/xs', group: 'spacing', v: 8 },
+    { name: 'space/sm', group: 'spacing', v: 12 },
+    { name: 'space/md', group: 'spacing', v: 16 },
+    { name: 'space/lg', group: 'spacing', v: 24 },
+    { name: 'space/xl', group: 'spacing', v: 32 },
+    { name: 'space/2xl', group: 'spacing', v: 48 },
+    { name: 'space/3xl', group: 'spacing', v: 64 },
+    { name: 'radius/sm', group: 'radius', v: 4 },
+    { name: 'radius/md', group: 'radius', v: 8 },
+    { name: 'radius/lg', group: 'radius', v: 16 },
+    { name: 'radius/xl', group: 'radius', v: 24 },
+    { name: 'size/container', group: 'size', v: 1200 },
+    { name: 'size/gutter', group: 'size', v: 24 }
+  ];
+
+  var tokens = [];      // typography tokens
+  var layTokens = [];   // layout tokens
+  var variableList = []; // from main thread
 
   // ---- helpers -----------------------------------------------------------
-  function num(v, fallback) {
-    var n = parseFloat(v);
-    return isNaN(n) ? fallback : n;
-  }
+  function num(v, fb) { var n = parseFloat(v); return isNaN(n) ? fb : n; }
   function scaleFactors() {
     return {
       desktop: 1,
@@ -266,24 +309,18 @@
   function decimals() { return num(document.getElementById('decimals').value, 2); }
   function roundTo(v, d) { var f = Math.pow(10, d); return Math.round(v * f) / f; }
 
-  // Build a full token (all breakpoints) from a flat desktop definition.
   function tokenFromDesktop(def) {
-    var f = scaleFactors();
-    var d = decimals();
-    var values = {};
+    var f = scaleFactors(), d = decimals(), values = {};
     BREAKPOINTS.forEach(function (bp) {
       var k = f[bp.key];
       values[bp.key] = {
-        fontFamily: def.family,
-        fontWeight: def.weight,
-        fontSize: roundTo(def.size * k, d),
-        lineHeight: roundTo(def.lh * k, d),
+        fontFamily: def.family, fontWeight: def.weight,
+        fontSize: roundTo(def.size * k, d), lineHeight: roundTo(def.lh * k, d),
         letterSpacing: roundTo(def.ls * k, d)
       };
     });
     return { name: def.name, values: values };
   }
-
   function emptyToken() {
     var values = {};
     BREAKPOINTS.forEach(function (bp) {
@@ -292,211 +329,263 @@
     return { name: 'new/token', values: values };
   }
 
-  // ---- rendering ---------------------------------------------------------
-  function render() {
-    var container = document.getElementById('tokens');
-    container.innerHTML = '';
-    tokens.forEach(function (token, i) {
-      container.appendChild(renderToken(token, i));
+  function layFromDef(def) {
+    var f = scaleFactors(), d = decimals(), values = {};
+    BREAKPOINTS.forEach(function (bp) {
+      // Radius stays constant by default; spacing/size scale down.
+      var k = def.group === 'radius' ? 1 : f[bp.key];
+      values[bp.key] = roundTo(def.v * k, d);
     });
+    return { name: def.name, group: def.group, values: values };
+  }
+  function emptyLayToken() {
+    var values = {};
+    BREAKPOINTS.forEach(function (bp) { values[bp.key] = 16; });
+    return { name: 'space/new', group: 'spacing', values: values };
   }
 
+  // ---- typography rendering ---------------------------------------------
+  function render() {
+    var c = document.getElementById('tokens');
+    c.innerHTML = '';
+    tokens.forEach(function (t, i) { c.appendChild(renderToken(t, i)); });
+  }
   function renderToken(token, index) {
-    var wrap = document.createElement('div');
-    wrap.className = 'token';
-
-    var head = document.createElement('div');
-    head.className = 'token-head';
+    var wrap = div('token');
+    var head = div('token-head');
     var name = inputEl('text', token.name, function (v) { token.name = v; });
-    name.className = 'name';
-    name.style.flex = '1';
+    name.style.flex = '1'; name.style.fontWeight = '600';
     var del = document.createElement('button');
-    del.className = 'del';
-    del.textContent = '✕';
-    del.title = 'Remove token';
+    del.className = 'del'; del.textContent = '✕'; del.title = 'Remove';
     del.onclick = function () { tokens.splice(index, 1); render(); };
-    head.appendChild(name);
-    head.appendChild(del);
-    wrap.appendChild(head);
+    head.appendChild(name); head.appendChild(del); wrap.appendChild(head);
 
-    // Family + weight are shared visually but stored per-breakpoint; editing
-    // here writes to all breakpoints at once (they rarely differ).
-    var meta = document.createElement('div');
-    meta.className = 'token-meta';
-    var famInput = inputEl('text', token.values[BREAKPOINTS[0].key].fontFamily, function (v) {
+    var meta = div('token-meta');
+    var fam = inputEl('text', token.values[BREAKPOINTS[0].key].fontFamily, function (v) {
       BREAKPOINTS.forEach(function (bp) { token.values[bp.key].fontFamily = v; });
     });
-    famInput.placeholder = 'Font family';
-    var weightInput = inputEl('number', token.values[BREAKPOINTS[0].key].fontWeight, function (v) {
+    var weight = inputEl('number', token.values[BREAKPOINTS[0].key].fontWeight, function (v) {
       BREAKPOINTS.forEach(function (bp) { token.values[bp.key].fontWeight = num(v, 400); });
     });
-    weightInput.placeholder = 'Weight';
-    meta.appendChild(labeled('Family', famInput));
-    meta.appendChild(labeled('Weight', weightInput));
+    meta.appendChild(labeled('Family', fam)); meta.appendChild(labeled('Weight', weight));
     wrap.appendChild(meta);
 
-    // Per-breakpoint size / line-height / letter-spacing.
-    var cols = document.createElement('div');
-    cols.className = 'bp-cols';
+    var cols = div('bp-cols');
     BREAKPOINTS.forEach(function (bp) {
-      var col = document.createElement('div');
-      col.className = 'bp-col';
-      var title = document.createElement('div');
-      title.className = 'bp-name';
-      title.textContent = bp.name;
-      col.appendChild(title);
-
-      col.appendChild(field('Size', token.values[bp.key].fontSize, function (v) {
-        token.values[bp.key].fontSize = num(v, 0);
-      }));
-      col.appendChild(field('Line', token.values[bp.key].lineHeight, function (v) {
-        token.values[bp.key].lineHeight = num(v, 0);
-      }));
-      col.appendChild(field('Letter', token.values[bp.key].letterSpacing, function (v) {
-        token.values[bp.key].letterSpacing = num(v, 0);
-      }));
+      var col = div('bp-col');
+      var title = div('bp-name'); title.textContent = bp.name; col.appendChild(title);
+      col.appendChild(field('Size', token.values[bp.key].fontSize, function (v) { token.values[bp.key].fontSize = num(v, 0); }));
+      col.appendChild(field('Line', token.values[bp.key].lineHeight, function (v) { token.values[bp.key].lineHeight = num(v, 0); }));
+      col.appendChild(field('Letter', token.values[bp.key].letterSpacing, function (v) { token.values[bp.key].letterSpacing = num(v, 0); }));
       cols.appendChild(col);
     });
     wrap.appendChild(cols);
-
     return wrap;
   }
 
+  // ---- layout rendering --------------------------------------------------
+  function renderLayout() {
+    var c = document.getElementById('lay-tokens');
+    c.innerHTML = '';
+    layTokens.forEach(function (t, i) { c.appendChild(renderLayToken(t, i)); });
+  }
+  function renderLayToken(token, index) {
+    var wrap = div('lay-token');
+    var head = div('lay-head');
+    var name = inputEl('text', token.name, function (v) { token.name = v; });
+    name.className = 'name';
+    var group = document.createElement('select');
+    group.className = 'group';
+    ['spacing', 'size', 'radius'].forEach(function (g) {
+      var o = document.createElement('option'); o.value = g; o.textContent = g;
+      if (token.group === g) o.selected = true; group.appendChild(o);
+    });
+    group.onchange = function () { token.group = group.value; };
+    var del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = 'Remove';
+    del.onclick = function () { layTokens.splice(index, 1); renderLayout(); };
+    head.appendChild(name); head.appendChild(group); head.appendChild(del);
+    wrap.appendChild(head);
+
+    var bps = div('lay-bps');
+    BREAKPOINTS.forEach(function (bp) {
+      var cell = div('cell');
+      var span = document.createElement('span'); span.textContent = bp.name; cell.appendChild(span);
+      cell.appendChild(inputEl('number', token.values[bp.key], function (v) { token.values[bp.key] = num(v, 0); }));
+      bps.appendChild(cell);
+    });
+    wrap.appendChild(bps);
+    return wrap;
+  }
+
+  // ---- generic dom helpers ----------------------------------------------
+  function div(cls) { var d = document.createElement('div'); d.className = cls; return d; }
   function field(label, value, onChange) {
-    var div = document.createElement('div');
-    div.className = 'field';
-    var span = document.createElement('span');
-    span.textContent = label;
-    div.appendChild(span);
-    div.appendChild(inputEl('number', value, onChange));
-    return div;
+    var d = div('field');
+    var span = document.createElement('span'); span.textContent = label; d.appendChild(span);
+    d.appendChild(inputEl('number', value, onChange));
+    return d;
   }
-
   function labeled(label, input) {
-    var div = document.createElement('div');
-    var span = document.createElement('div');
-    span.className = 'mini';
-    span.textContent = label;
-    div.appendChild(span);
-    div.appendChild(input);
-    return div;
+    var d = document.createElement('div');
+    var span = document.createElement('div'); span.className = 'mini'; span.textContent = label;
+    d.appendChild(span); d.appendChild(input); return d;
   }
-
   function inputEl(type, value, onChange) {
     var input = document.createElement('input');
-    input.type = type;
-    input.value = value;
+    input.type = type; input.value = value;
     if (type === 'number') input.step = 'any';
     input.oninput = function () { onChange(input.value); };
     return input;
   }
 
-  // ---- settings: breakpoint editor --------------------------------------
+  // ---- settings: breakpoints --------------------------------------------
   function renderBreakpoints() {
     var grid = document.getElementById('bp-grid');
     grid.innerHTML = '<div class="head">Name</div><div class="head">Min width</div>';
     BREAKPOINTS.forEach(function (bp) {
-      var nameInput = inputEl('text', bp.name, function (v) { bp.name = v; });
-      var widthInput = inputEl('number', bp.width, function (v) { bp.width = num(v, 0); });
-      grid.appendChild(nameInput);
-      grid.appendChild(widthInput);
+      grid.appendChild(inputEl('text', bp.name, function (v) { bp.name = v; }));
+      grid.appendChild(inputEl('number', bp.width, function (v) { bp.width = num(v, 0); }));
     });
   }
 
-  // ---- actions -----------------------------------------------------------
-  function loadDefault() {
-    tokens = DEFAULT_SCALE.map(tokenFromDesktop);
-    render();
-    setStatus('Loaded default type scale (' + tokens.length + ' tokens).');
+  // ---- config getters ----------------------------------------------------
+  function enabledProps() {
+    var out = {};
+    document.querySelectorAll('#prop-checks input[type="checkbox"]').forEach(function (b) { out[b.value] = b.checked; });
+    return out;
+  }
+  function typoCollection() { return document.getElementById('collection-name').value.trim() || 'Typography'; }
+  function layoutCollection() { return document.getElementById('layout-collection-name').value.trim() || 'Layout'; }
+
+  function post(type, payload) { parent.postMessage({ pluginMessage: { type: type, payload: payload } }, '*'); }
+  function setStatus(id, text, isErr) {
+    var el = document.getElementById(id);
+    el.innerHTML = text; el.className = isErr ? 'status err' : 'status';
   }
 
+  // ---- typography actions -----------------------------------------------
+  function loadDefault() { tokens = DEFAULT_SCALE.map(tokenFromDesktop); render(); setStatus('type-status', 'Loaded ' + tokens.length + ' tokens.'); }
   function autofill() {
-    var f = scaleFactors();
-    var d = decimals();
+    var f = scaleFactors(), d = decimals();
     tokens.forEach(function (token) {
       var base = token.values[BREAKPOINTS[0].key];
       BREAKPOINTS.forEach(function (bp) {
         var k = f[bp.key];
         token.values[bp.key] = {
-          fontFamily: base.fontFamily,
-          fontWeight: base.fontWeight,
-          fontSize: roundTo(base.fontSize * k, d),
-          lineHeight: roundTo(base.lineHeight * k, d),
+          fontFamily: base.fontFamily, fontWeight: base.fontWeight,
+          fontSize: roundTo(base.fontSize * k, d), lineHeight: roundTo(base.lineHeight * k, d),
           letterSpacing: roundTo(base.letterSpacing * k, d)
         };
       });
     });
-    render();
-    setStatus('Filled Tablet/Mobile from Desktop values.');
+    render(); setStatus('type-status', 'Filled Tablet/Mobile from Desktop.');
+  }
+  function createType() {
+    if (tokens.length === 0) { setStatus('type-status', 'Add at least one token.', true); return; }
+    post('create-variables', { collectionName: typoCollection(), modes: BREAKPOINTS, tokens: tokens, properties: enabledProps(), decimals: decimals() });
+    setStatus('type-status', 'Creating…');
   }
 
-  function enabledProps() {
-    var out = {};
-    var boxes = document.querySelectorAll('#prop-checks input[type="checkbox"]');
-    boxes.forEach(function (b) { out[b.value] = b.checked; });
-    return out;
+  // ---- layout actions ----------------------------------------------------
+  function loadLayDefault() { layTokens = DEFAULT_LAYOUT.map(layFromDef); renderLayout(); setStatus('layout-status', 'Loaded ' + layTokens.length + ' tokens.'); }
+  function layAutofill() {
+    var f = scaleFactors(), d = decimals();
+    layTokens.forEach(function (token) {
+      var base = token.values[BREAKPOINTS[0].key];
+      BREAKPOINTS.forEach(function (bp) {
+        var k = token.group === 'radius' ? 1 : f[bp.key];
+        token.values[bp.key] = roundTo(base * k, d);
+      });
+    });
+    renderLayout(); setStatus('layout-status', 'Filled Tablet/Mobile from Desktop.');
+  }
+  function createLayout() {
+    if (layTokens.length === 0) { setStatus('layout-status', 'Add at least one token.', true); return; }
+    post('create-layout', { collectionName: layoutCollection(), modes: BREAKPOINTS, tokens: layTokens, decimals: decimals() });
+    setStatus('layout-status', 'Creating…');
   }
 
-  function collectionName() {
-    return document.getElementById('collection-name').value.trim() || 'Typography';
+  // ---- bind actions ------------------------------------------------------
+  function refreshVariables() { parent.postMessage({ pluginMessage: { type: 'list-variables' } }, '*'); }
+  function populateBindCollections() {
+    var names = [];
+    variableList.forEach(function (v) { if (names.indexOf(v.collection) === -1) names.push(v.collection); });
+    var sel = document.getElementById('bind-collection');
+    var current = sel.value;
+    sel.innerHTML = '';
+    names.forEach(function (n) {
+      var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+    });
+    if (names.indexOf(current) !== -1) sel.value = current;
+    else if (names.indexOf(layoutCollection()) !== -1) sel.value = layoutCollection();
+    populateBindVariables();
   }
-
-  function create() {
-    if (tokens.length === 0) {
-      setStatus('Add at least one token (or load the default scale).', true);
-      return;
+  function populateBindVariables() {
+    var coll = document.getElementById('bind-collection').value;
+    var sel = document.getElementById('bind-variable');
+    sel.innerHTML = '';
+    variableList
+      .filter(function (v) { return v.collection === coll && v.type === 'FLOAT'; })
+      .forEach(function (v) {
+        var o = document.createElement('option'); o.value = v.name; o.textContent = v.name; sel.appendChild(o);
+      });
+    if (sel.options.length === 0) {
+      var o = document.createElement('option'); o.value = ''; o.textContent = '(no numeric variables)'; sel.appendChild(o);
     }
-    parent.postMessage({ pluginMessage: {
-      type: 'create-variables',
-      payload: {
-        collectionName: collectionName(),
-        modes: BREAKPOINTS,
-        tokens: tokens,
-        properties: enabledProps(),
-        decimals: decimals()
-      }
-    } }, '*');
-    setStatus('Creating variables…');
   }
-
+  function bind() {
+    var variable = document.getElementById('bind-variable').value;
+    if (!variable) { setStatus('bind-status', 'No variable selected.', true); return; }
+    post('bind-selection', {
+      collectionName: document.getElementById('bind-collection').value,
+      variableName: variable,
+      target: document.getElementById('bind-field').value
+    });
+    setStatus('bind-status', 'Binding…');
+  }
+  function applyAlign() {
+    post('apply-align', {
+      primary: document.getElementById('align-primary').value,
+      counter: document.getElementById('align-counter').value
+    });
+    setStatus('align-status', 'Applying…');
+  }
   function applyModes() {
-    parent.postMessage({ pluginMessage: {
-      type: 'apply-modes',
-      payload: { collectionName: collectionName(), modes: BREAKPOINTS }
-    } }, '*');
-    document.getElementById('apply-status').textContent = 'Applying…';
+    post('apply-modes', { collectionNames: [typoCollection(), layoutCollection()], modes: BREAKPOINTS });
+    setStatus('apply-status', 'Applying…');
   }
 
-  function setStatus(text, isErr) {
-    var el = document.getElementById('status');
-    el.textContent = text;
-    el.className = isErr ? 'status err' : 'status';
-  }
-
-  // ---- wiring ------------------------------------------------------------
+  // ---- tab wiring --------------------------------------------------------
   document.querySelectorAll('.tab').forEach(function (tab) {
     tab.onclick = function () {
       document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
       tab.classList.add('active');
       document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'bind') refreshVariables();
     };
   });
 
   document.getElementById('btn-default').onclick = loadDefault;
   document.getElementById('btn-autofill').onclick = autofill;
   document.getElementById('btn-add').onclick = function () { tokens.push(emptyToken()); render(); };
-  document.getElementById('btn-import').onclick = function () {
-    parent.postMessage({ pluginMessage: { type: 'import-styles' } }, '*');
-    setStatus('Importing text styles…');
-  };
-  document.getElementById('btn-create').onclick = create;
-  document.getElementById('btn-apply').onclick = applyModes;
-  document.getElementById('btn-close').onclick = function () {
-    parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
-  };
+  document.getElementById('btn-import').onclick = function () { parent.postMessage({ pluginMessage: { type: 'import-styles' } }, '*'); setStatus('type-status', 'Importing…'); };
+  document.getElementById('btn-create-type').onclick = createType;
 
-  // ---- messages from the plugin main thread ------------------------------
+  document.getElementById('btn-lay-default').onclick = loadLayDefault;
+  document.getElementById('btn-lay-autofill').onclick = layAutofill;
+  document.getElementById('btn-lay-add').onclick = function () { layTokens.push(emptyLayToken()); renderLayout(); };
+  document.getElementById('btn-create-layout').onclick = createLayout;
+
+  document.getElementById('btn-apply').onclick = applyModes;
+  document.getElementById('btn-refresh-vars').onclick = refreshVariables;
+  document.getElementById('bind-collection').onchange = populateBindVariables;
+  document.getElementById('btn-bind').onclick = bind;
+  document.getElementById('btn-align').onclick = applyAlign;
+  document.getElementById('btn-close').onclick = function () { parent.postMessage({ pluginMessage: { type: 'close' } }, '*'); };
+
+  // ---- messages from main thread ----------------------------------------
   onmessage = function (event) {
     var msg = event.data.pluginMessage;
     if (!msg) return;
@@ -504,45 +593,50 @@
     if (msg.type === 'create-done') {
       var r = msg.result;
       var text = 'Done — ' + r.created + ' created, ' + r.updated + ' updated in "' + r.collectionName + '".';
-      if (r.modeWarnings && r.modeWarnings.length) {
-        text += ' Note: modes ' + r.modeWarnings.join(', ') + ' need a paid plan.';
-      }
-      setStatus(text, r.modeWarnings && r.modeWarnings.length);
+      if (r.modeWarnings && r.modeWarnings.length) text += ' Modes ' + r.modeWarnings.join(', ') + ' need a paid plan.';
+      setStatus('type-status', text, r.modeWarnings && r.modeWarnings.length);
     }
-
+    if (msg.type === 'create-layout-done') {
+      var lr = msg.result;
+      var lt = 'Done — ' + lr.created + ' created, ' + lr.updated + ' updated in "' + lr.collectionName + '".';
+      if (lr.modeWarnings && lr.modeWarnings.length) lt += ' Modes ' + lr.modeWarnings.join(', ') + ' need a paid plan.';
+      setStatus('layout-status', lt, lr.modeWarnings && lr.modeWarnings.length);
+    }
     if (msg.type === 'import-done') {
-      if (msg.tokens.length === 0) {
-        setStatus('No local text styles found in this file.', true);
-        return;
-      }
+      if (msg.tokens.length === 0) { setStatus('type-status', 'No local text styles found.', true); return; }
       tokens = msg.tokens.map(function (t) {
-        return tokenFromDesktop({
-          name: t.name, family: t.fontFamily, weight: t.fontWeight,
-          size: t.fontSize, lh: t.lineHeight, ls: t.letterSpacing
-        });
+        return tokenFromDesktop({ name: t.name, family: t.fontFamily, weight: t.fontWeight, size: t.fontSize, lh: t.lineHeight, ls: t.letterSpacing });
       });
       render();
-      setStatus('Imported ' + msg.tokens.length + ' text style(s). Tablet/Mobile auto-scaled — adjust as needed.');
+      setStatus('type-status', 'Imported ' + msg.tokens.length + ' style(s). T/M auto-scaled — adjust as needed.');
     }
-
     if (msg.type === 'apply-done') {
-      var el = document.getElementById('apply-status');
-      if (msg.result.error) {
-        el.textContent = msg.result.error;
-        el.className = 'status err';
-      } else {
-        el.className = 'status';
-        el.innerHTML = 'Applied to ' + msg.result.applied + ' frame(s):<br>' +
-          (msg.result.details || []).join('<br>');
-      }
+      if (msg.result.error) setStatus('apply-status', msg.result.error, true);
+      else setStatus('apply-status', 'Applied to ' + msg.result.applied + ' frame(s):<br>' + (msg.result.details || []).join('<br>'));
     }
-
-    if (msg.type === 'error') {
-      setStatus('Error: ' + msg.message, true);
+    if (msg.type === 'variables-list') {
+      variableList = msg.variables || [];
+      populateBindCollections();
     }
+    if (msg.type === 'bind-done') {
+      var br = msg.result;
+      if (br.error) { setStatus('bind-status', br.error, true); return; }
+      var bt = 'Bound on ' + br.bound + ' element(s).';
+      if (br.skipped && br.skipped.length) bt += ' Skipped ' + br.skipped.length + ' (field not applicable — e.g. padding/gap need auto-layout).';
+      setStatus('bind-status', bt, br.skipped && br.skipped.length > 0 && br.bound === 0);
+    }
+    if (msg.type === 'align-done') {
+      var ar = msg.result;
+      if (ar.error) { setStatus('align-status', ar.error, true); return; }
+      var at = 'Applied to ' + ar.applied + ' auto-layout frame(s).';
+      if (ar.skipped && ar.skipped.length) at += ' Skipped ' + ar.skipped.length + ' (no auto-layout).';
+      setStatus('align-status', at);
+    }
+    if (msg.type === 'error') { setStatus('type-status', 'Error: ' + msg.message, true); }
   };
 
   // ---- init --------------------------------------------------------------
   renderBreakpoints();
   loadDefault();
+  loadLayDefault();
 </script>

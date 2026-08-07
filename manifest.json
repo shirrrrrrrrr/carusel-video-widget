@@ -1,6 +1,6 @@
 {
-  "name": "Typography Breakpoint Variables",
-  "id": "typography-breakpoint-variables",
+  "name": "Responsive Breakpoint Variables",
+  "id": "responsive-breakpoint-variables",
   "api": "1.0.0",
   "editorType": ["figma"],
   "main": "code.js",
