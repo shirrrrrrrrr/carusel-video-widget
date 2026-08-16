@@ -342,47 +342,97 @@ async function bindTextStyles(payload) {
 // Sets the mode on EVERY listed collection so both type and layout switch.
 // ---------------------------------------------------------------------------
 
+function isFrameLike(node) {
+  return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' ||
+         node.type === 'INSTANCE' || node.type === 'SECTION' || node.type === 'GROUP';
+}
+
+// Pick the breakpoint whose min-width the frame's width first meets.
+function pickBreakpoint(width, ordered) {
+  let chosen = ordered[ordered.length - 1];
+  for (var i = 0; i < ordered.length; i++) {
+    if (width >= ordered[i].width) { chosen = ordered[i]; break; }
+  }
+  return chosen;
+}
+
+// Set the width-appropriate mode on one frame across all target collections.
+function applyModeToFrame(frame, targets, ordered) {
+  const chosen = pickBreakpoint(frame.width, ordered);
+  let didAny = false;
+  targets.forEach(function (collection) {
+    const mode = collection.modes.find(function (m) { return m.name === chosen.name; });
+    if (!mode) return;
+    setExplicitMode(frame, collection, mode.modeId);
+    didAny = true;
+  });
+  return didAny ? chosen.name : null;
+}
+
+async function resolveTargets(collectionNames) {
+  const collections = await getLocalCollections();
+  return collections.filter(function (c) { return collectionNames.indexOf(c.name) !== -1; });
+}
+
+// Apply to the current selection, or — when scope is 'all' — every top-level
+// frame on the page (no selection needed).
 async function applyModesByWidth(payload) {
   const collectionNames = payload.collectionNames || ['Typography'];
   const modes = payload.modes;
+  const scope = payload.scope || 'selection';
 
-  const collections = await getLocalCollections();
-  const targets = collections.filter(function (c) { return collectionNames.indexOf(c.name) !== -1; });
-  if (targets.length === 0) {
-    return { error: 'No matching collections found. Create the variables first.' };
+  const targets = await resolveTargets(collectionNames);
+  if (targets.length === 0) return { error: 'No matching collections found. Create the variables first.' };
+
+  let frames;
+  if (scope === 'all') {
+    frames = figma.currentPage.children.filter(isFrameLike);
+    if (frames.length === 0) return { error: 'No frames found on this page.' };
+  } else {
+    frames = figma.currentPage.selection.filter(isFrameLike);
+    if (frames.length === 0) return { error: 'Select one or more frames first.' };
   }
 
-  const selection = figma.currentPage.selection;
-  const frames = selection.filter(function (n) {
-    return n.type === 'FRAME' || n.type === 'COMPONENT' || n.type === 'COMPONENT_SET' ||
-           n.type === 'INSTANCE' || n.type === 'SECTION' || n.type === 'GROUP';
-  });
-  if (frames.length === 0) return { error: 'Select one or more frames first.' };
-
   const ordered = modes.slice().sort(function (a, b) { return b.width - a.width; });
-
   let applied = 0;
   const details = [];
   frames.forEach(function (frame) {
-    const width = frame.width;
-    let chosen = ordered[ordered.length - 1];
-    for (var i = 0; i < ordered.length; i++) {
-      if (width >= ordered[i].width) { chosen = ordered[i]; break; }
-    }
-    let didAny = false;
-    targets.forEach(function (collection) {
-      const mode = collection.modes.find(function (m) { return m.name === chosen.name; });
-      if (!mode) return;
-      setExplicitMode(frame, collection, mode.modeId);
-      didAny = true;
-    });
-    if (didAny) {
-      applied++;
-      details.push(frame.name + ' (' + Math.round(width) + 'px) → ' + chosen.name);
-    }
+    const name = applyModeToFrame(frame, targets, ordered);
+    if (name) { applied++; details.push(frame.name + ' (' + Math.round(frame.width) + 'px) → ' + name); }
   });
   return { applied: applied, details: details };
 }
+
+// ---------------------------------------------------------------------------
+// Watch mode — while the plugin is open, re-apply the mode whenever a frame's
+// width changes. Figma has no native auto-breakpoint, and a plugin can't run
+// after it is closed, so this only works while the plugin window is open.
+// ---------------------------------------------------------------------------
+
+var watchState = { on: false, collectionNames: ['Typography'], modes: [] };
+
+async function handleDocumentChange(event) {
+  if (!watchState.on) return;
+  const targets = await resolveTargets(watchState.collectionNames);
+  if (targets.length === 0) return;
+  const ordered = watchState.modes.slice().sort(function (a, b) { return b.width - a.width; });
+
+  let changed = 0;
+  event.documentChanges.forEach(function (change) {
+    if (change.type !== 'PROPERTY_CHANGE') return;
+    if (change.properties.indexOf('width') === -1) return;
+    const node = change.node;
+    if (!node || node.removed || !isFrameLike(node)) return;
+    // Only retarget top-level frames so we don't fight auto-layout children.
+    if (node.parent && node.parent.type !== 'PAGE') return;
+    if (applyModeToFrame(node, targets, ordered)) changed++;
+  });
+  if (changed > 0) {
+    figma.ui.postMessage({ type: 'watch-tick', changed: changed });
+  }
+}
+
+figma.on('documentchange', handleDocumentChange);
 
 // ---------------------------------------------------------------------------
 // List variables so the UI can offer them for binding.
@@ -541,6 +591,23 @@ figma.ui.onmessage = async function (msg) {
       if (result.error) figma.notify(result.error, { error: true });
       else figma.notify('Applied breakpoint mode to ' + result.applied + ' frame(s).');
       figma.ui.postMessage({ type: 'apply-done', result: result });
+      return;
+    }
+
+    if (msg.type === 'watch-on') {
+      watchState.on = true;
+      watchState.collectionNames = msg.payload.collectionNames;
+      watchState.modes = msg.payload.modes;
+      // Do an immediate pass over every frame so things are correct right away.
+      const result = await applyModesByWidth({ collectionNames: msg.payload.collectionNames, modes: msg.payload.modes, scope: 'all' });
+      figma.notify('Watch on — auto-applying modes by width while the plugin is open.');
+      figma.ui.postMessage({ type: 'apply-done', result: result });
+      return;
+    }
+
+    if (msg.type === 'watch-off') {
+      watchState.on = false;
+      figma.notify('Watch off.');
       return;
     }
 

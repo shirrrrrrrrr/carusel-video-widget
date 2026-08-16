@@ -138,8 +138,17 @@
 <div class="panel" id="panel-bind">
   <div class="card">
     <div class="label">1 · Apply mode by frame width</div>
-    <div class="hint">Select frames, then assign each the breakpoint mode matching its width (both Typography &amp; Layout collections).</div>
-    <button class="primary full" id="btn-apply" style="margin-top:8px">Apply mode to selected frames</button>
+    <div class="hint">Figma has no automatic breakpoint — the mode is set per frame. These buttons read each
+      frame's width and set the matching mode (both Typography &amp; Layout collections).</div>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="btn-apply" style="flex:1">Selected frames</button>
+      <button class="primary" id="btn-apply-all" style="flex:1">All frames on page</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:10px; cursor:pointer;">
+      <input type="checkbox" id="watch-toggle">
+      <span><b>Auto-update while plugin is open</b> — re-applies the mode whenever you resize a frame.</span>
+    </label>
+    <div class="mini" style="margin-top:4px">Stops when you close the plugin (a plugin can't run in the background).</div>
     <div class="status" id="apply-status"></div>
   </div>
 
@@ -575,9 +584,18 @@
     });
     setStatus('align-status', 'Applying…');
   }
-  function applyModes() {
-    post('apply-modes', { collectionNames: [typoCollection(), layoutCollection()], modes: BREAKPOINTS });
+  function applyModes(scope) {
+    post('apply-modes', { collectionNames: [typoCollection(), layoutCollection()], modes: BREAKPOINTS, scope: scope || 'selection' });
     setStatus('apply-status', 'Applying…');
+  }
+  function toggleWatch() {
+    var on = document.getElementById('watch-toggle').checked;
+    if (on) {
+      parent.postMessage({ pluginMessage: { type: 'watch-on', payload: { collectionNames: [typoCollection(), layoutCollection()], modes: BREAKPOINTS } } }, '*');
+    } else {
+      parent.postMessage({ pluginMessage: { type: 'watch-off' } }, '*');
+      setStatus('apply-status', 'Auto-update off.');
+    }
   }
 
   // ---- tab wiring --------------------------------------------------------
@@ -604,7 +622,9 @@
   document.getElementById('btn-lay-add').onclick = function () { layTokens.push(emptyLayToken()); renderLayout(); };
   document.getElementById('btn-create-layout').onclick = createLayout;
 
-  document.getElementById('btn-apply').onclick = applyModes;
+  document.getElementById('btn-apply').onclick = function () { applyModes('selection'); };
+  document.getElementById('btn-apply-all').onclick = function () { applyModes('all'); };
+  document.getElementById('watch-toggle').onchange = toggleWatch;
   document.getElementById('btn-refresh-vars').onclick = refreshVariables;
   document.getElementById('bind-collection').onchange = populateBindVariables;
   document.getElementById('btn-bind').onclick = bind;
@@ -664,6 +684,9 @@
     if (msg.type === 'apply-done') {
       if (msg.result.error) setStatus('apply-status', msg.result.error, true);
       else setStatus('apply-status', 'Applied to ' + msg.result.applied + ' frame(s):<br>' + (msg.result.details || []).join('<br>'));
+    }
+    if (msg.type === 'watch-tick') {
+      setStatus('apply-status', '⟳ Auto-updated ' + msg.changed + ' frame(s) on resize.');
     }
     if (msg.type === 'variables-list') {
       variableList = msg.variables || [];
