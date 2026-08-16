@@ -23,6 +23,23 @@ to those variables, then switch a frame's mode and everything reflows.
 
 </div>
 
+## Responsive text styles (the main use case)
+
+Keep your existing **Text Styles** (Heading 1, Body, …) — the plugin binds each
+style's font size / line height / letter spacing to variables that hold a
+different value per breakpoint. The style stays global; only its resolved value
+changes with the frame's mode. Set a frame to Mobile and every text using
+"Heading 1" shrinks automatically.
+
+**1-click:** Type tab → **Make text styles responsive**. It imports your styles,
+creates matching variables (`heading/h1/fontSize`, …), and binds the styles to
+them in one go. Then set each frame's breakpoint mode (see *Apply mode by frame
+width*) and your typography reflows.
+
+> Binding variables to text styles needs a reasonably up-to-date Figma desktop
+> app. If your version can't, the plugin says so — you can still bind manually in
+> the text-style editor.
+
 ## Tabs
 
 ### Type

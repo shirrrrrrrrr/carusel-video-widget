@@ -92,7 +92,17 @@
 
 <!-- ============================ TYPE ============================ -->
 <div class="panel active" id="panel-type">
+  <div class="card" style="border-color: var(--accent)">
+    <div class="label">⚡ Make your text styles responsive</div>
+    <div class="hint">Keeps your existing <b>Text Styles</b> and binds their size / line-height to
+      variables, so the same style shows different values per breakpoint. One click imports your
+      styles, creates the variables, and binds them.</div>
+    <button class="primary full" id="btn-responsive" style="margin-top:8px">Make text styles responsive (1-click)</button>
+    <div class="status" id="responsive-status"></div>
+  </div>
+
   <div class="section">
+    <div class="mini" style="margin-bottom:6px">Or build the scale manually:</div>
     <div class="toolbar">
       <button class="small" id="btn-default">Load default scale</button>
       <button class="small" id="btn-import">Import text styles</button>
@@ -102,7 +112,10 @@
     <div class="mini">Each token → grouped variables (e.g. <code>heading/h1/fontSize</code>), one value per breakpoint mode.</div>
   </div>
   <div id="tokens"></div>
-  <button class="primary full" id="btn-create-type">Create / update typography variables</button>
+  <div class="row">
+    <button class="primary" id="btn-create-type" style="flex:2">Create / update variables</button>
+    <button id="btn-bind-styles" style="flex:1" title="Bind existing text styles to the variables by matching name">Bind styles</button>
+  </div>
   <div class="status" id="type-status"></div>
 </div>
 
@@ -296,6 +309,7 @@
   var tokens = [];      // typography tokens
   var layTokens = [];   // layout tokens
   var variableList = []; // from main thread
+  var responsiveFlow = false; // true while the 1-click styles→variables→bind chain runs
 
   // ---- helpers -----------------------------------------------------------
   function num(v, fb) { var n = parseFloat(v); return isNaN(n) ? fb : n; }
@@ -486,6 +500,16 @@
     post('create-variables', { collectionName: typoCollection(), modes: BREAKPOINTS, tokens: tokens, properties: enabledProps(), decimals: decimals() });
     setStatus('type-status', 'Creating…');
   }
+  function bindStyles() {
+    parent.postMessage({ pluginMessage: { type: 'bind-text-styles', payload: { collectionName: typoCollection() } } }, '*');
+    setStatus('type-status', 'Binding text styles…');
+  }
+  // One-click: import styles → create variables → bind styles.
+  function makeResponsive() {
+    responsiveFlow = true;
+    setStatus('responsive-status', 'Step 1/3 · Importing text styles…');
+    parent.postMessage({ pluginMessage: { type: 'import-styles' } }, '*');
+  }
 
   // ---- layout actions ----------------------------------------------------
   function loadLayDefault() { layTokens = DEFAULT_LAYOUT.map(layFromDef); renderLayout(); setStatus('layout-status', 'Loaded ' + layTokens.length + ' tokens.'); }
@@ -572,6 +596,8 @@
   document.getElementById('btn-add').onclick = function () { tokens.push(emptyToken()); render(); };
   document.getElementById('btn-import').onclick = function () { parent.postMessage({ pluginMessage: { type: 'import-styles' } }, '*'); setStatus('type-status', 'Importing…'); };
   document.getElementById('btn-create-type').onclick = createType;
+  document.getElementById('btn-bind-styles').onclick = bindStyles;
+  document.getElementById('btn-responsive').onclick = makeResponsive;
 
   document.getElementById('btn-lay-default').onclick = loadLayDefault;
   document.getElementById('btn-lay-autofill').onclick = layAutofill;
@@ -595,6 +621,22 @@
       var text = 'Done — ' + r.created + ' created, ' + r.updated + ' updated in "' + r.collectionName + '".';
       if (r.modeWarnings && r.modeWarnings.length) text += ' Modes ' + r.modeWarnings.join(', ') + ' need a paid plan.';
       setStatus('type-status', text, r.modeWarnings && r.modeWarnings.length);
+      if (responsiveFlow) {
+        setStatus('responsive-status', 'Step 3/3 · Binding styles to variables…');
+        parent.postMessage({ pluginMessage: { type: 'bind-text-styles', payload: { collectionName: typoCollection() } } }, '*');
+      }
+    }
+    if (msg.type === 'bind-styles-done') {
+      var sr = msg.result;
+      if (sr.error) {
+        setStatus(responsiveFlow ? 'responsive-status' : 'type-status', sr.error, true);
+        responsiveFlow = false;
+        return;
+      }
+      var st = '✓ ' + sr.bound + ' of ' + sr.total + ' text style(s) are now responsive.';
+      if (sr.missing && sr.missing.length) st += ' No matching variable for: ' + sr.missing.join(', ') + '.';
+      setStatus(responsiveFlow ? 'responsive-status' : 'type-status', st);
+      responsiveFlow = false;
     }
     if (msg.type === 'create-layout-done') {
       var lr = msg.result;
@@ -603,12 +645,21 @@
       setStatus('layout-status', lt, lr.modeWarnings && lr.modeWarnings.length);
     }
     if (msg.type === 'import-done') {
-      if (msg.tokens.length === 0) { setStatus('type-status', 'No local text styles found.', true); return; }
+      if (msg.tokens.length === 0) {
+        setStatus(responsiveFlow ? 'responsive-status' : 'type-status', 'No local text styles found in this file.', true);
+        responsiveFlow = false;
+        return;
+      }
       tokens = msg.tokens.map(function (t) {
         return tokenFromDesktop({ name: t.name, family: t.fontFamily, weight: t.fontWeight, size: t.fontSize, lh: t.lineHeight, ls: t.letterSpacing });
       });
       render();
-      setStatus('type-status', 'Imported ' + msg.tokens.length + ' style(s). T/M auto-scaled — adjust as needed.');
+      if (responsiveFlow) {
+        setStatus('responsive-status', 'Step 2/3 · Creating variables from ' + msg.tokens.length + ' style(s)…');
+        createType();
+      } else {
+        setStatus('type-status', 'Imported ' + msg.tokens.length + ' style(s). T/M auto-scaled — adjust as needed.');
+      }
     }
     if (msg.type === 'apply-done') {
       if (msg.result.error) setStatus('apply-status', msg.result.error, true);

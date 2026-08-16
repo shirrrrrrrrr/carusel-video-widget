@@ -268,6 +268,76 @@ function weightFromStyleName(styleName) {
 }
 
 // ---------------------------------------------------------------------------
+// Bind local TEXT STYLES to the typography variables (by matching name), so the
+// global styles themselves become responsive: a text using "heading/h1" shows
+// the Desktop value on a Desktop-mode frame and the Mobile value on a Mobile one.
+// ---------------------------------------------------------------------------
+
+// Text-style fields we bind and the matching variable-name suffix.
+var STYLE_FIELD_MAP = [
+  { field: 'fontSize', suffix: 'fontSize' },
+  { field: 'lineHeight', suffix: 'lineHeight' },
+  { field: 'letterSpacing', suffix: 'letterSpacing' }
+];
+
+function bindStyleVariable(style, field, variable) {
+  try {
+    style.setBoundVariable(field, variable);
+  } catch (err) {
+    style.setBoundVariable(field, variable.id);
+  }
+}
+
+async function bindTextStyles(payload) {
+  const collectionName = payload.collectionName || 'Typography';
+  const fields = payload.fields || ['fontSize', 'lineHeight', 'letterSpacing'];
+
+  const collections = await getLocalCollections();
+  const collection = collections.find(function (c) { return c.name === collectionName; });
+  if (!collection) {
+    return { error: 'Collection "' + collectionName + '" not found. Create the variables first.' };
+  }
+
+  const vars = await getLocalVariables();
+  const varsInColl = {};
+  vars.forEach(function (v) {
+    if (v.variableCollectionId === collection.id) varsInColl[v.name] = v;
+  });
+
+  const styles = await getLocalTextStyles();
+  if (styles.length === 0) return { error: 'No local text styles found in this file.' };
+
+  let bound = 0;
+  const missing = [];
+  let supported = true;
+
+  for (var i = 0; i < styles.length; i++) {
+    const style = styles[i];
+    if (typeof style.setBoundVariable !== 'function') { supported = false; break; }
+
+    let anyOnStyle = false;
+    for (var f = 0; f < STYLE_FIELD_MAP.length; f++) {
+      const map = STYLE_FIELD_MAP[f];
+      if (fields.indexOf(map.field) === -1) continue;
+      const variable = varsInColl[style.name + '/' + map.suffix];
+      if (!variable) continue;
+      try {
+        bindStyleVariable(style, map.field, variable);
+        anyOnStyle = true;
+      } catch (err) { /* field not bindable */ }
+    }
+    if (anyOnStyle) bound++;
+    else missing.push(style.name);
+  }
+
+  if (!supported) {
+    return { error: 'This Figma version cannot bind variables to text styles via the API. Update the desktop app, or bind them manually in the text-style editor.' };
+  }
+
+  return { bound: bound, missing: missing, total: styles.length };
+}
+
+// ---------------------------------------------------------------------------
 // Apply the right mode to selected frames based on their width.
 // Sets the mode on EVERY listed collection so both type and layout switch.
 // ---------------------------------------------------------------------------
@@ -455,6 +525,14 @@ figma.ui.onmessage = async function (msg) {
       const tokens = await importFromTextStyles();
       figma.ui.postMessage({ type: 'import-done', tokens: tokens });
       figma.notify(tokens.length ? ('Imported ' + tokens.length + ' text style(s).') : 'No local text styles found.');
+      return;
+    }
+
+    if (msg.type === 'bind-text-styles') {
+      const result = await bindTextStyles(msg.payload);
+      if (result.error) figma.notify(result.error, { error: true });
+      else figma.notify('Bound variables on ' + result.bound + ' of ' + result.total + ' text style(s).');
+      figma.ui.postMessage({ type: 'bind-styles-done', result: result });
       return;
     }
 
