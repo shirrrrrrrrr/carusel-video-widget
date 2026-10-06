@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Your booking</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="wrap" style="max-width:560px"><div class="card stack" id="app"><p class="muted">Loading…</p></div></main>
+  <script type="module">
+    import { api, esc, applyBranding, fmtDate, fmtTime } from '/common.js';
+    const app = document.getElementById('app');
+    const token = location.pathname.split('/')[2];
+    const profile = await api('/api/public/profile');
+    applyBranding(profile);
+    const S = profile.strings, L = profile.language;
+
+    async function render() {
+      try {
+        const b = await api(`/api/public/bookings/${token}`);
+        const tz = b.client_tz;
+        app.innerHTML = `
+          <h1>${esc(b.type_name)}</h1>
+          <p class="muted">${esc(b.owner_name)}</p>
+          ${b.status === 'cancelled' ? `<div class="warn-box">${esc(S.cancelled)}</div>` : ''}
+          <div><strong>${esc(S.when)}:</strong> ${esc(fmtDate(b.start_utc, tz, L))}, ${fmtTime(b.start_utc, tz, L)}–${fmtTime(b.end_utc, tz, L)} <span class="muted small">(${esc(tz)})</span></div>
+          ${b.location ? `<div><strong>${esc(S.where)}:</strong> ${/^https?:/.test(b.location) ? `<a href="${esc(b.location)}" target="_blank" rel="noopener">${esc(b.location)}</a>` : esc(b.location)}</div>` : ''}
+          ${b.can_cancel ? `
+            <hr style="border:none;border-top:1px solid var(--line)">
+            <div class="stack">
+              <label for="reason">${esc(S.cancelReason)}</label>
+              <textarea id="reason" maxlength="1000"></textarea>
+              <div><button class="danger" id="cancel">${esc(S.cancel)}</button></div>
+              <div id="err"></div>
+            </div>` : ''}`;
+        document.getElementById('cancel')?.addEventListener('click', async (ev) => {
+          if (!confirm(S.cancelConfirm)) return;
+          ev.target.disabled = true;
+          try {
+            await api(`/api/public/bookings/${token}/cancel`, { method: 'POST', body: { reason: document.getElementById('reason').value } });
+            render();
+          } catch (e) { document.getElementById('err').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; ev.target.disabled = false; }
+        });
+      } catch (e) { app.innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
+    }
+    render();
+  </script>
+</body>
+</html>

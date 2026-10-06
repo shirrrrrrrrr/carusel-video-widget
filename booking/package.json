@@ -1,0 +1,13 @@
+{
+  "name": "booking",
+  "version": "1.0.0",
+  "description": "Self-hosted Calendly replacement: meeting types, multi-account Google Calendar, reminders (email/WhatsApp), transcript review and summaries.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}

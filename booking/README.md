@@ -1,0 +1,111 @@
+# Booking — a self-hosted Calendly replacement
+
+Clients book meetings with you. The system checks **all your Google calendars across several Google accounts**
+for conflicts and saves each booking to the calendar you choose. It sends reminders by **email or WhatsApp**
+(the client picks whether and when). Transcripts from your notetaker come in for **your review**, and a summary
+is sent to the client **only after you approve it**.
+
+No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQLite).
+
+## Features
+
+| Area | What you get |
+|---|---|
+| Meeting types | Name, link (`/book/<slug>`), description, one or several durations (the client chooses), color, location (Google Meet created automatically, phone, address, custom link) |
+| Times | **Fixed start times** (every 15/30/60… min) or **client picks any start time** within your hours · gap before/after meetings · minimum notice · how far ahead · max per day · weekly hours per meeting type |
+| Calendars | Connect **several Google accounts** · tick "check for conflicts" on any calendar · one **default calendar** for new bookings · each meeting type can save to a different calendar or account |
+| Client questions | Custom fields: short/long text, email, phone, number, URL, dropdown, multiple choice, checkbox, date. Each can be required |
+| Reminders | Per meeting type: channels offered (email / WhatsApp), timing options (5 min … 1 week), pre-selected defaults. The client chooses. **You** get your own reminders too (email / WhatsApp) |
+| Notifications | Confirmation + cancellation emails, a "new booking" email to you, the Google Calendar invite, a self-service cancel link |
+| Transcripts | Your notetaker is invited to the meeting automatically → its transcript arrives by webhook → you review it → "Generate summary" sends it to your summary tool → you edit → **Approve & send** |
+| Languages | Booking pages and client messages in English or Hebrew (RTL) |
+
+## Quick start
+
+```bash
+cd booking
+cp .env.example .env          # then fill it in (see below)
+npm start                     # http://localhost:3000  ·  dashboard: /admin
+npm test                      # unit + end-to-end tests
+```
+
+### 1. Google Calendar (required)
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → create a project.
+2. **APIs & Services → Library**: enable **Google Calendar API**, plus **Gmail API** if you want emails sent from your Gmail.
+3. **OAuth consent screen**: choose External, add your own Google addresses as *test users* (or publish the app).
+4. **Credentials → Create OAuth client ID → Web application**. Authorized redirect URI: `https://YOUR-DOMAIN/admin/google/callback`.
+5. Put the client ID and secret in `.env`. Restart, open `/admin` → **Calendars → Connect Google account**. Repeat for each account.
+6. Tick **Check for conflicts** on every calendar that matters, and choose the **Default** calendar.
+
+### 2. Email
+- `EMAIL_PROVIDER=gmail` sends from a connected Google account (the default calendar's account, or `EMAIL_FROM_GOOGLE_ACCOUNT`).
+- `EMAIL_PROVIDER=resend` sends via [Resend](https://resend.com) (needs a verified domain).
+
+### 3. WhatsApp (optional)
+- **Twilio** (`WHATSAPP_PROVIDER=twilio`): the sandbox works for testing. In production WhatsApp requires an
+  approved template for messages you start, so set `TWILIO_CONTENT_SID`.
+- **Meta Cloud API** (`WHATSAPP_PROVIDER=meta`): create a message template, e.g. `meeting_reminder`, with 4 body
+  variables: `{{1}}` name, `{{2}}` meeting, `{{3}}` date/time, `{{4}}` link.
+
+Test both from **Settings → Integrations**.
+
+## Transcripts & summaries
+
+1. In a meeting type, enable **Invite my notetaker** and enter the bot's address (e.g. `fred@fireflies.ai`, or your
+   Otter / tl;dv / Fathom calendar address). The notetaker is added to the calendar event and joins by itself.
+2. When the transcript is ready, the notetaker (or Zapier / Make / n8n) posts it to:
+
+```
+POST /api/webhooks/transcript?key=TRANSCRIPT_WEBHOOK_SECRET
+{
+  "source": "otter",
+  "external_id": "meeting-123",
+  "title": "Consultation — Dana",
+  "start_time": "2026-10-06T10:00:00Z",
+  "meeting_url": "https://meet.google.com/abc-defg-hij",
+  "transcript": "Dana: Hi…\nMe: Hello…"        // or [{ "speaker": "Dana", "text": "Hi" }, …]
+}
+```
+   The transcript is matched to its booking by `booking_token`, the Meet link, or the start time (±30 min).
+   **Fireflies.ai** is built in: set `FIREFLIES_API_KEY` + `FIREFLIES_WEBHOOK_SECRET` and use `/api/webhooks/fireflies` as the webhook URL.
+3. It appears in **Dashboard → Transcripts** as *Needs review*.
+4. **Generate with summary tool** POSTs this to `SUMMARY_API_URL` (`Authorization: Bearer SUMMARY_API_KEY`):
+   ```json
+   { "transcript_id": 7, "title": "...", "client_name": "Dana", "language": "he",
+     "meeting_start": "...", "transcript": "...", "callback_url": "https://…/api/webhooks/summary?key=…" }
+   ```
+   The tool replies with `{"summary": "..."}` right away, or later calls `callback_url` with `{"transcript_id": 7, "summary": "..."}`.
+   You can also write or paste the summary yourself.
+5. Edit the summary, then click **Approve & send to client**. Nothing is sent without that click.
+
+## Deploying
+
+Any host that runs Node 22 and keeps a disk for the SQLite file: Railway, Render (with a disk), Fly.io (with a volume), or a small VPS.
+Set `BASE_URL` to the public https URL, set a strong `ADMIN_PASSWORD` and `APP_SECRET`, and keep `data/` on persistent storage.
+Reminders are sent by the running server (it checks every 30 s), so it has to run all the time, not on serverless functions.
+
+## How availability works
+
+A start time is offered when:
+- it falls inside that weekday's hours (in your timezone), and the meeting ends before the window closes;
+- it is at least *minimum notice* from now and within *book up to* days;
+- `[start − gap before, end + gap after]` doesn't touch any busy time in **any** calendar marked "check for conflicts"
+  in **any** connected account, or any existing booking (with that booking's own gaps);
+- the daily limit for that meeting type isn't reached.
+
+Times are re-checked against fresh calendar data at the moment of booking. If Google can't be reached, no times are
+shown, rather than risk a double booking.
+
+## Project layout
+
+```
+src/server.js        HTTP server, page routing
+src/availability.js  pure slot engine (unit-tested)
+src/bookings.js      booking create/cancel, messages
+src/google.js        OAuth, calendars, free/busy, events, Gmail send
+src/notify.js        email (Gmail/Resend) + WhatsApp (Twilio/Meta)
+src/reminders.js     reminder scheduling + background sender
+src/transcripts.js   transcript intake, summary tool, approved sending
+src/routes/*.js      public, admin and webhook APIs
+public/              booking page, manage page, admin dashboard
+```
