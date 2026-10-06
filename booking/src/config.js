@@ -46,6 +46,11 @@ export const config = {
     metaTemplate: env('META_WA_TEMPLATE'),
     metaTemplateLang: env('META_WA_TEMPLATE_LANG', 'en'),
   },
+  zoom: {
+    accountId: env('ZOOM_ACCOUNT_ID'),
+    clientId: env('ZOOM_CLIENT_ID'),
+    clientSecret: env('ZOOM_CLIENT_SECRET'),
+  },
   transcripts: {
     webhookSecret: env('TRANSCRIPT_WEBHOOK_SECRET'),
     firefliesKey: env('FIREFLIES_API_KEY'),

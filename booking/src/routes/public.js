@@ -1,6 +1,6 @@
 import { all, getSettings, parseRow } from '../db.js';
 import { json, rateLimit } from '../http.js';
-import { availability, cancelBooking, createBooking, getBooking, getType, userError } from '../bookings.js';
+import { availability, cancelBooking, createBooking, getBooking, getType, typeLocations, userError } from '../bookings.js';
 import { addDays, localParts } from '../time.js';
 import { clientStrings } from '../i18n.js';
 
@@ -10,7 +10,8 @@ const readLimiter = rateLimit({ windowMs: 60_000, max: 120 });
 export function publicType(t) {
   return {
     slug: t.slug, name: t.name, description: t.description, durations: t.durations, slot_mode: t.slot_mode,
-    location_type: t.location_type, location_value: t.location_type === 'in_person' ? t.location_value : '',
+    // Only addresses are public; links are sent after booking.
+    locations: typeLocations(t).map((l) => ({ type: l.type, value: l.type === 'in_person' ? l.value : '' })),
     fields: t.fields, require_phone: Boolean(t.require_phone), color: t.color, max_days_ahead: t.max_days_ahead,
     client_reminder_channels: t.client_reminder_channels, client_reminder_options: t.client_reminder_options,
     client_reminder_defaults: t.client_reminder_defaults,
@@ -68,7 +69,7 @@ export function mountPublic(r) {
     if (!b) throw userError('Booking not found', 404);
     json(res, 200, {
       type_name: b.type_name, start_utc: b.start_utc, end_utc: b.end_utc, client_tz: b.client_tz, name: b.name,
-      status: b.status, location: b.location, meet_link: b.meet_link, owner_name: getSettings().owner_name,
+      status: b.status, location: b.location, location_type: b.location_type, meet_link: b.meet_link, owner_name: getSettings().owner_name,
       can_cancel: b.status === 'confirmed' && b.start_utc > Date.now(),
     });
   });

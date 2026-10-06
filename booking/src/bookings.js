@@ -7,6 +7,7 @@ import { emailEnabled, emailLayout, normalizePhone, sendEmail } from './notify.j
 import { randomToken } from './crypto.js';
 import { scheduleReminders, cancelReminders } from './reminders.js';
 import { config } from './config.js';
+import { createZoomMeeting, deleteZoomMeeting, zoomConfigured } from './zoom.js';
 import { t } from './i18n.js';
 
 const DAY = 86_400_000;
@@ -64,12 +65,22 @@ export async function availability(type, duration, fromDate, toDate) {
   return computeAvailability(await availabilityParams(type, duration, fromDate, toDate));
 }
 
-export function locationText(type, booking) {
-  switch (type.location_type) {
+export const LOCATION_TYPES = ['google_meet', 'zoom', 'phone', 'in_person', 'custom'];
+
+/** Locations a meeting type offers (first = default). */
+export function typeLocations(type) {
+  return (Array.isArray(type.locations) ? type.locations : []).filter((l) => LOCATION_TYPES.includes(l?.type));
+}
+
+/** Human-readable "where" for messages, in the booking page language. */
+export function locationText(booking, loc) {
+  const L = t(getSettings().language);
+  switch (booking.location_type) {
     case 'google_meet': return booking.meet_link || 'Google Meet';
-    case 'phone': return type.location_value || (booking.phone ? `Phone: ${booking.phone}` : 'Phone call');
+    case 'zoom': return booking.meet_link || loc?.value || 'Zoom';
+    case 'phone': return booking.phone ? L.phoneCallTo(booking.phone) : L.locPhone;
     case 'in_person':
-    case 'custom': return type.location_value || '';
+    case 'custom': return loc?.value || '';
     default: return '';
   }
 }
@@ -112,7 +123,10 @@ export async function createBooking(type, input) {
   const channels = (input.reminder_channels || []).filter((c) => type.client_reminder_channels.includes(c));
   const offsets = (input.reminder_offsets || []).map(Number).filter((m) => type.client_reminder_options.includes(m));
   const phone = normalizePhone(input.phone);
-  if ((type.require_phone || channels.includes('whatsapp')) && !phone) throw userError('A valid phone number with country code is required (e.g. +972501234567)');
+  const locations = typeLocations(type);
+  const loc = locations.find((l) => l.type === input.location_type) || locations[0] || null;
+  if (input.location_type && loc?.type !== input.location_type) throw userError('Invalid meeting location');
+  if ((type.require_phone || channels.includes('whatsapp') || loc?.type === 'phone') && !phone) throw userError('A valid phone number with country code is required (e.g. +972501234567)');
   const answers = validateAnswers(type.fields, input.answers);
 
   // Re-check availability against fresh calendar data.
@@ -129,11 +143,32 @@ export async function createBooking(type, input) {
     const clash = get("SELECT 1 FROM bookings WHERE status='confirmed' AND start_utc < ? AND end_utc > ?", end, start);
     if (clash) throw userError('taken', 409);
     return Number(run(`INSERT INTO bookings(token, meeting_type_id, type_name, start_utc, end_utc, client_tz, name, email, phone, answers,
-      reminder_channels, reminder_offsets, calendar_ref, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      reminder_channels, reminder_offsets, calendar_ref, location_type, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       token, type.id, type.name, start, end, clientTz, name, email, phone, JSON.stringify(answers),
-      JSON.stringify(channels), JSON.stringify(offsets.length && channels.length ? offsets : []), calendar?.id ?? null, Date.now()).lastInsertRowid);
+      JSON.stringify(channels), JSON.stringify(offsets.length && channels.length ? offsets : []), calendar?.id ?? null,
+      loc?.type ?? null, Date.now()).lastInsertRowid);
   });
   let booking = getBooking('id', id);
+
+  // Zoom: create a dedicated meeting when the Zoom API is configured, otherwise use the personal link.
+  if (loc?.type === 'zoom') {
+    if (zoomConfigured()) {
+      try {
+        const z = await createZoomMeeting({ topic: `${type.name} — ${name}`, start, duration, timezone: settings.timezone, agenda: type.description });
+        run('UPDATE bookings SET meet_link=?, zoom_meeting_id=? WHERE id=?', z.joinUrl, z.id, id);
+      } catch (e) {
+        run('DELETE FROM bookings WHERE id=?', id);
+        console.error('[booking] zoom failed:', e.message);
+        throw userError('Could not create the Zoom meeting. Please try again later.', 502);
+      }
+    } else if (loc.value) {
+      run('UPDATE bookings SET meet_link=? WHERE id=?', loc.value, id);
+    }
+    booking = getBooking('id', id);
+  }
+  const where = locationText(booking, loc);
+  run('UPDATE bookings SET location=? WHERE id=?', where, id);
+  booking = getBooking('id', id);
 
   if (calendar) {
     try {
@@ -144,6 +179,7 @@ export async function createBooking(type, input) {
         '',
         ...answers.filter((a) => a.value !== '' && a.value !== false).map((a) => `${a.label}: ${a.value === true ? '✓' : a.value}`),
         phone ? `Phone: ${phone}` : '',
+        loc && loc.type !== 'google_meet' && where ? `${t(settings.language).where}: ${where}` : '',
         '',
         `${t(settings.language).manageLine} ${manageUrl(booking)}`,
       ].filter((l, i, arr) => l !== '' || (arr[i - 1] ?? '') !== '');
@@ -153,20 +189,22 @@ export async function createBooking(type, input) {
         start: { dateTime: new Date(start).toISOString() },
         end: { dateTime: new Date(end).toISOString() },
         attendees,
-        location: ['phone', 'in_person', 'custom'].includes(type.location_type) ? (type.location_value || undefined) : undefined,
+        location: loc && loc.type !== 'google_meet' ? (where || undefined) : undefined,
         reminders: { useDefault: true },
         extendedProperties: { private: { bookingToken: token } },
-      }, { meet: type.location_type === 'google_meet' });
-      const meet = ev.hangoutLink || ev.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri || null;
-      run('UPDATE bookings SET google_event_id=?, meet_link=? WHERE id=?', ev.id, meet, id);
+      }, { meet: loc?.type === 'google_meet' });
+      if (loc?.type === 'google_meet') {
+        const meet = ev.hangoutLink || ev.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri || null;
+        run('UPDATE bookings SET meet_link=?, location=? WHERE id=?', meet, meet || 'Google Meet', id);
+      }
+      run('UPDATE bookings SET google_event_id=? WHERE id=?', ev.id, id);
     } catch (e) {
+      if (booking.zoom_meeting_id) await deleteZoomMeeting(booking.zoom_meeting_id).catch(() => {});
       run('DELETE FROM bookings WHERE id=?', id);
       console.error('[booking] calendar event failed:', e.message);
       throw userError('Could not create the calendar event. Please try again later.', 502);
     }
   }
-  booking = getBooking('id', id);
-  run('UPDATE bookings SET location=? WHERE id=?', locationText(type, booking), id);
   booking = getBooking('id', id);
   clearBusyCache();
   scheduleReminders(booking, type);
@@ -240,6 +278,7 @@ export async function cancelBooking(b, { reason = '', by = 'client' } = {}) {
     const cal = get('SELECT * FROM calendars WHERE id=?', b.calendar_ref);
     if (cal) await deleteEvent(cal, b.google_event_id).catch((e) => console.error('[cancel] delete event failed:', e.message));
   }
+  if (b.zoom_meeting_id && zoomConfigured()) await deleteZoomMeeting(b.zoom_meeting_id).catch((e) => console.error('[cancel] zoom delete failed:', e.message));
   const updated = getBooking('id', b.id);
   if (emailEnabled()) {
     const s = getSettings();

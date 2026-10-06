@@ -3,7 +3,8 @@ import { all, get, getSettings, parseRow, run, setSettings } from '../db.js';
 import { parseCookies, json, redirect, setCookie, rateLimit } from '../http.js';
 import { safeEqual, sign, unsign } from '../crypto.js';
 import { authUrl, googleConfigured, handleCallback, syncCalendars } from '../google.js';
-import { cancelBooking, clearBusyCache, getBooking, userError } from '../bookings.js';
+import { LOCATION_TYPES, cancelBooking, clearBusyCache, getBooking, userError } from '../bookings.js';
+import { zoomConfigured } from '../zoom.js';
 import { normalizeSchedule } from '../availability.js';
 import { emailEnabled, emailLayout, sendEmail, sendWhatsApp, whatsappEnabled } from '../notify.js';
 import { getTranscript, ingestTranscript, listTranscripts, requestSummary, sendSummary, storeSummary } from '../transcripts.js';
@@ -47,6 +48,22 @@ function sanitizeFields(fields) {
   })).filter((f) => f.label);
 }
 
+function sanitizeLocations(list) {
+  const seen = new Set();
+  const out = [];
+  for (const l of Array.isArray(list) ? list : []) {
+    if (!LOCATION_TYPES.includes(l?.type) || seen.has(l.type)) continue;
+    seen.add(l.type);
+    const value = String(l.value ?? '').trim().slice(0, 500);
+    if (l.type === 'zoom' && !value && !zoomConfigured()) throw userError('Zoom: enter your personal Zoom link (or set up the Zoom API in .env so a meeting is created per booking)');
+    if (l.type === 'zoom' && value && !/^https:\/\//.test(value)) throw userError('Zoom link must start with https://');
+    if (l.type === 'in_person' && !value) throw userError('In person: enter the address');
+    if (l.type === 'custom' && !value) throw userError('Custom location: enter the link or details');
+    out.push({ type: l.type, value: l.type === 'google_meet' || l.type === 'phone' ? '' : value });
+  }
+  return out;
+}
+
 function sanitizeType(b, existing = {}) {
   const name = String(b.name ?? existing.name ?? '').trim().slice(0, 120);
   if (!name) throw userError('Name is required');
@@ -71,8 +88,7 @@ function sanitizeType(b, existing = {}) {
     daily_limit: intIn(b.daily_limit, 0, 100, 0),
     schedule: JSON.stringify(normalizeSchedule(b.schedule)),
     calendar_ref: calendarRef,
-    location_type: ['google_meet', 'phone', 'in_person', 'custom', 'none'].includes(b.location_type) ? b.location_type : 'google_meet',
-    location_value: String(b.location_value ?? '').slice(0, 500),
+    locations: JSON.stringify(sanitizeLocations(b.locations)),
     fields: JSON.stringify(sanitizeFields(b.fields)),
     require_phone: b.require_phone ? 1 : 0,
     client_reminder_channels: JSON.stringify(channelList(b.client_reminder_channels)),
@@ -101,6 +117,7 @@ function adminState() {
       emailProvider: config.email.provider, emailEnabled: emailEnabled(),
       whatsappProvider: config.whatsapp.provider, whatsappEnabled: whatsappEnabled(),
       summaryConfigured: Boolean(config.transcripts.summaryUrl),
+      zoomConfigured: zoomConfigured(),
       webhookConfigured: Boolean(config.transcripts.webhookSecret),
       firefliesConfigured: Boolean(config.transcripts.firefliesKey),
       baseUrl: config.baseUrl,

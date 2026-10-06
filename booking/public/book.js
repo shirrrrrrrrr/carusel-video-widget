@@ -10,18 +10,21 @@ const state = {
   slotsByDate: new Map(),    // client-local date -> [ms]
   rangesByDate: new Map(),
   loadedFor: null,
-  date: null, start: null,
+  date: null, start: null, loc: null,
   step: 'pick',              // pick | form | done
   loading: false, error: '',
 };
 
 const pad = (n) => String(n).padStart(2, '0');
+const LOC_ICON = { google_meet: '🎥', zoom: '🟦', phone: '📞', in_person: '📍', custom: '🔗' };
+const locName = (t) => ({ google_meet: state.S.locGoogleMeet, zoom: state.S.locZoom, phone: state.S.locPhone, in_person: state.S.locInPerson, custom: state.S.locCustom })[t];
+const needsPhone = () => state.type.require_phone || state.loc === 'phone';
 const ymd = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
 
 async function init() {
   try {
     const [profile, type] = await Promise.all([api('/api/public/profile'), api(`/api/public/types/${encodeURIComponent(slug)}`)]);
-    Object.assign(state, { profile, type, S: profile.strings, L: profile.language, duration: type.durations[0] });
+    Object.assign(state, { profile, type, S: profile.strings, L: profile.language, duration: type.durations[0], loc: type.locations[0]?.type || null });
     applyBranding(profile);
     document.title = `${type.name} — ${profile.owner_name}`;
     const now = new Date();
@@ -72,7 +75,7 @@ async function loadMonth() {
 
 function infoPanel() {
   const { type, profile, S, L } = state;
-  const loc = { google_meet: 'Google Meet', phone: '📞', in_person: type.location_value || '📍', custom: '', none: '' }[type.location_type];
+  const loc = type.locations.map((l) => `${LOC_ICON[l.type]} ${l.type === 'in_person' && l.value ? l.value : locName(l.type)}`).join(' · ');
   return `
     <div class="info stack">
       <a href="/" class="muted small">${esc(profile.owner_name)}</a>
@@ -184,12 +187,18 @@ function formStep() {
     <button class="link" id="back">${S.dir === 'rtl' ? '→' : '←'} ${esc(S.back)}</button>
     <h2 style="margin-top:10px">${esc(S.yourDetails)}</h2>
     <form id="form" class="stack" novalidate>
+      ${type.locations.length > 1 ? `
+        <div><label>${esc(S.howToMeet)}</label>
+          <div class="choice-row">${type.locations.map((l) => `<button type="button" data-loc="${l.type}" class="${state.loc === l.type ? 'sel' : ''}">${LOC_ICON[l.type]} ${esc(locName(l.type))}</button>`).join('')}</div>
+          ${type.locations.find((l) => l.type === 'in_person' && l.value) && state.loc === 'in_person' ? `<div class="small muted" style="margin-top:6px">📍 ${esc(type.locations.find((l) => l.type === 'in_person').value)}</div>` : ''}
+        </div>` : ''}
       <div class="grid2">
         <div><label for="name">${esc(S.name)} *</label><input id="name" name="name" autocomplete="name" required maxlength="200"></div>
         <div><label for="email">${esc(S.email)} *</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="200"></div>
       </div>
-      <div id="phoneWrap" class="${type.require_phone ? '' : 'hidden'}">
-        <label for="phone">${esc(S.phone)}${type.require_phone ? ' *' : ''}</label>
+      <div id="phoneWrap" class="${needsPhone() ? '' : 'hidden'}">
+        <label for="phone">${esc(S.phone)}<span id="phoneStar">${needsPhone() ? ' *' : ''}</span></label>
+        <div class="hint small muted ${state.loc === 'phone' ? '' : 'hidden'}" id="phoneHint">${esc(S.phoneCallHint)}</div>
         <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+972 50 123 4567" dir="ltr">
       </div>
       ${type.fields.map(fieldHtml).join('')}
@@ -230,7 +239,12 @@ function render() {
 
 function updatePhoneVisibility() {
   const wa = $$('input[name=rch]').some((i) => i.checked && i.value === 'whatsapp') && $('#remind')?.checked;
-  $('#phoneWrap')?.classList.toggle('hidden', !(state.type.require_phone || wa));
+  const required = needsPhone() || wa;
+  $('#phoneWrap')?.classList.toggle('hidden', !required);
+  const phone = $('#phone');
+  if (phone) phone.required = required;
+  if ($('#phoneStar')) $('#phoneStar').textContent = required ? ' *' : '';
+  $('#phoneHint')?.classList.toggle('hidden', state.loc !== 'phone');
 }
 
 function bind() {
@@ -253,6 +267,20 @@ function bind() {
     if (!hit) { $('#freeErr').textContent = `${state.S.availableBetween}: ${(state.rangesByDate.get(state.date) || []).map(([a, b]) => `${fmtTime(a, state.tz, state.L)}–${fmtTime(b, state.tz, state.L)}`).join(', ')}`; return; }
     state.start = hit; state.step = 'form'; render();
   };
+
+  $$('[data-loc]').forEach((b) => b.onclick = () => {
+    state.loc = b.dataset.loc;
+    // Keep what the client already typed while re-rendering the form.
+    const keep = Object.fromEntries($$('input, select, textarea', $('#form')).map((el) => [el.id || el.name, el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value]));
+    render();
+    for (const el of $$('input, select, textarea', $('#form'))) {
+      const v = keep[el.id || el.name];
+      if (v === undefined || el.type === 'radio') continue;
+      if (el.type === 'checkbox') el.checked = v; else el.value = v;
+    }
+    $('#remindOpts')?.classList.toggle('hidden', !$('#remind')?.checked);
+    updatePhoneVisibility();
+  });
 
   const back = $('#back');
   if (back) back.onclick = () => { state.step = 'pick'; render(); };
@@ -280,7 +308,7 @@ function bind() {
     }
     const wantsReminders = remind ? remind.checked : false;
     const body = {
-      start: state.start, duration: state.duration, timezone: state.tz,
+      start: state.start, duration: state.duration, timezone: state.tz, location_type: state.loc,
       name: $('#name').value, email: $('#email').value, phone: $('#phone').value, answers,
       reminder_channels: wantsReminders ? $$('input[name=rch]:checked').map((i) => i.value) : [],
       reminder_offsets: wantsReminders ? $$('input[name=roff]:checked').map((i) => Number(i.value)) : [],

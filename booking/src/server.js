@@ -18,8 +18,8 @@ if (problems.length) {
 // Seed a first meeting type so the booking page isn't empty on first run.
 if (!get('SELECT 1 FROM meeting_types LIMIT 1')) {
   const weekdays = { 0: [[540, 1020]], 1: [[540, 1020]], 2: [[540, 1020]], 3: [[540, 1020]], 4: [[540, 1020]], 5: [], 6: [] };
-  run(`INSERT INTO meeting_types(slug, name, description, durations, schedule, buffer_after, fields, created_at)
-       VALUES(?,?,?,?,?,?,?,?)`, 'intro', 'Intro call', 'A short call to get to know each other.', '[30]',
+  run(`INSERT INTO meeting_types(slug, name, description, durations, schedule, buffer_after, fields, created_at, locations)
+       VALUES(?,?,?,?,?,?,?,?,'[{"type":"google_meet","value":""}]')`, 'intro', 'Intro call', 'A short call to get to know each other.', '[30]',
   JSON.stringify(weekdays), 15,
   JSON.stringify([{ id: 'topic', label: 'What would you like to talk about?', type: 'textarea', required: false, placeholder: '', options: [] }]),
   Date.now());

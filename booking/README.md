@@ -11,7 +11,8 @@ No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQL
 
 | Area | What you get |
 |---|---|
-| Meeting types | Name, link (`/book/<slug>`), description, one or several durations (the client chooses), color, location (Google Meet created automatically, phone, address, custom link) |
+| Meeting types | Name, link (`/book/<slug>`), description, one or several durations (the client chooses), color |
+| Where | Per meeting type: **Google Meet** (link created automatically), **Zoom** (personal link, or a new meeting per booking via the Zoom API), **phone call** (the client's number is required and you call them), in person, or another link. Tick several and the client chooses |
 | Times | **Fixed start times** (every 15/30/60… min) or **client picks any start time** within your hours · gap before/after meetings · minimum notice · how far ahead · max per day · weekly hours per meeting type |
 | Calendars | Connect **several Google accounts** · tick "check for conflicts" on any calendar · one **default calendar** for new bookings · each meeting type can save to a different calendar or account |
 | Client questions | Custom fields: short/long text, email, phone, number, URL, dropdown, multiple choice, checkbox, date. Each can be required |
@@ -41,7 +42,13 @@ npm test                      # unit + end-to-end tests
 - `EMAIL_PROVIDER=gmail` sends from a connected Google account (the default calendar's account, or `EMAIL_FROM_GOOGLE_ACCOUNT`).
 - `EMAIL_PROVIDER=resend` sends via [Resend](https://resend.com) (needs a verified domain).
 
-### 3. WhatsApp (optional)
+### 3. Zoom (optional)
+- Without setup: tick **Zoom** in a meeting type and paste your personal Zoom link.
+- For a separate Zoom meeting per booking: create a **Server-to-Server OAuth** app at [marketplace.zoom.us](https://marketplace.zoom.us/)
+  with the `meeting:write:meeting:admin` scope, and put `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET` in `.env`.
+  Cancelled bookings delete their Zoom meeting.
+
+### 4. WhatsApp (optional)
 - **Twilio** (`WHATSAPP_PROVIDER=twilio`): the sandbox works for testing. In production WhatsApp requires an
   approved template for messages you start, so set `TWILIO_CONTENT_SID`.
 - **Meta Cloud API** (`WHATSAPP_PROVIDER=meta`): create a message template, e.g. `meeting_reminder`, with 4 body

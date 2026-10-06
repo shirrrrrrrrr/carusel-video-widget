@@ -4,7 +4,14 @@ const app = $('#app');
 const PRESETS = [5, 10, 15, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080];
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const FIELD_TYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', phone: 'Phone', number: 'Number', url: 'URL', select: 'Dropdown', radio: 'Multiple choice', checkbox: 'Checkbox', date: 'Date' };
-const LOCATIONS = { google_meet: 'Google Meet (link created automatically)', phone: 'Phone call', in_person: 'In person (address)', custom: 'Custom (Zoom link, etc.)', none: 'No location' };
+const LOCATIONS = {
+  google_meet: { label: '🎥 Google Meet', hint: 'A Meet link is created automatically for each booking.' },
+  zoom: { label: '🟦 Zoom', hint: 'Your personal Zoom link. If the Zoom API is set up in .env, a separate meeting is created per booking and this field is optional.', placeholder: 'https://zoom.us/j/…' },
+  phone: { label: '📞 Phone call', hint: 'The client must enter a phone number, and you call them.' },
+  in_person: { label: '📍 In person', hint: 'Shown to the client on the booking page.', placeholder: 'Address' },
+  custom: { label: '🔗 Other', hint: 'Any other link or instructions (Teams, WhatsApp video…).', placeholder: 'Link or details' },
+};
+const LOC_ICON = { google_meet: '🎥', zoom: '🟦', phone: '📞', in_person: '📍', custom: '🔗' };
 
 let S = null;               // admin state
 let tab = 'bookings';
@@ -103,7 +110,7 @@ async function bookingsView() {
   box.innerHTML = `<table><thead><tr><th>When</th><th>Meeting</th><th>Client</th><th>Details</th><th></th></tr></thead><tbody>
     ${list.map((b) => `<tr>
       <td><strong>${esc(when(b.start_utc))}</strong><div class="muted small">${(b.end_utc - b.start_utc) / 60000} min · client tz ${esc(b.client_tz)}</div></td>
-      <td>${esc(b.type_name)}${b.meet_link ? `<div><a class="small" href="${esc(b.meet_link)}" target="_blank" rel="noopener">Join Meet</a></div>` : b.location ? `<div class="small muted">${esc(b.location)}</div>` : ''}</td>
+      <td>${esc(b.type_name)}${b.meet_link ? `<div><a class="small" href="${esc(b.meet_link)}" target="_blank" rel="noopener">${b.location_type === 'zoom' ? 'Join Zoom' : 'Join Meet'}</a></div>` : b.location ? `<div class="small muted">${esc(b.location)}</div>` : ''}</td>
       <td>${esc(b.name)}<div class="small"><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></div>${b.phone ? `<div class="small" dir="ltr">${esc(b.phone)}</div>` : ''}</td>
       <td class="small">
         ${b.answers.filter((a) => a.value !== '' && a.value !== false).map((a) => `<div><span class="muted">${esc(a.label)}:</span> ${esc(a.value === true ? '✓' : a.value)}</div>`).join('')}
@@ -128,7 +135,7 @@ function blankType() {
     name: '', slug: '', description: '', durations: [30], slot_mode: 'interval', slot_interval: 30, free_granularity: 5,
     buffer_before: 0, buffer_after: 15, min_notice: 240, max_days_ahead: 30, daily_limit: 0,
     schedule: { 0: wk, 1: wk, 2: wk, 3: wk, 4: wk, 5: [], 6: [] }, calendar_ref: null,
-    location_type: 'google_meet', location_value: '', fields: [], require_phone: 0,
+    locations: [{ type: 'google_meet', value: '' }], fields: [], require_phone: 0,
     client_reminder_channels: ['email'], client_reminder_options: [60, 1440], client_reminder_defaults: [1440],
     owner_reminders: [30], owner_reminder_channels: ['email'], transcriber_enabled: 0, transcriber_email: '',
     color: S.settings.brand_color || '#4f46e5', active: 1, position: 0,
@@ -144,6 +151,7 @@ function typesView() {
       <div class="card type-card stack" style="border-top-color:${esc(t.color)}">
         <div class="row"><h3 class="grow" style="margin:0">${esc(t.name)}</h3>${t.active ? '' : '<span class="pill">Hidden</span>'}</div>
         <div class="small muted">${t.durations.map((d) => durationLabel(d)).join(' / ')} · ${t.slot_mode === 'free' ? 'any start time' : `every ${t.slot_interval} min`} · buffer ${t.buffer_before}/${t.buffer_after} min</div>
+        <div class="small">${(t.locations || []).map((l) => LOC_ICON[l.type]).join(' ') || '—'}</div>
         <div class="small"><a href="/book/${encodeURIComponent(t.slug)}" target="_blank">/book/${esc(t.slug)}</a></div>
         <div class="row"><button data-edit="${t.id}">Edit</button><button data-copy="${esc(t.slug)}">Copy link</button><button data-dup="${t.id}">Duplicate</button></div>
       </div>`).join('')}</div>`;
@@ -183,10 +191,18 @@ function typeEditor() {
           <div><label>Color</label><input type="color" name="color" value="${esc(d.color)}"></div>
           <div><label>Visible</label><label class="inline"><input type="checkbox" name="active" ${d.active ? 'checked' : ''}> Show on booking page</label></div>
         </div>
-        <div class="grid2">
-          <div><label>Location</label><select name="location_type">${Object.entries(LOCATIONS).map(([k, l]) => `<option value="${k}" ${d.location_type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-          <div id="locVal"><label>Location details</label><input name="location_value" value="${esc(d.location_value)}" placeholder="Address / link / phone"></div>
-        </div>
+      </fieldset>
+
+      <fieldset class="stack"><legend>Where does the meeting happen?</legend>
+        <div class="small muted">Tick one, or several to let the client choose when booking.</div>
+        ${Object.entries(LOCATIONS).map(([k, l]) => {
+          const cur = (d.locations || []).find((x) => x.type === k);
+          return `<div class="field-item stack">
+            <label class="inline" style="font-weight:600"><input type="checkbox" name="loc" value="${k}" ${cur ? 'checked' : ''}> ${l.label}</label>
+            <div class="hint">${k === 'zoom' && S.status.zoomConfigured ? 'Zoom API is connected — a new Zoom meeting is created for every booking.' : l.hint}</div>
+            ${l.placeholder ? `<input data-locval="${k}" value="${esc(cur?.value || '')}" placeholder="${esc(l.placeholder)}" ${cur ? '' : 'disabled'} dir="auto">` : ''}
+          </div>`;
+        }).join('')}
       </fieldset>
 
       <fieldset class="stack"><legend>Calendar</legend>
@@ -252,10 +268,12 @@ function typeEditor() {
     const free = form.slot_mode.value === 'free';
     $('#intervalBox').classList.toggle('hidden', free);
     $('#granBox').classList.toggle('hidden', !free);
-    $('#locVal').classList.toggle('hidden', ['google_meet', 'none'].includes(form.location_type.value));
   };
   $$('input[name=slot_mode]').forEach((r) => r.onchange = syncMode);
-  form.location_type.onchange = syncMode;
+  $$('input[name=loc]', form).forEach((c) => c.onchange = () => {
+    const inp = form.querySelector(`[data-locval=${c.value}]`);
+    if (inp) inp.disabled = !c.checked;
+  });
   syncMode();
   renderSchedule();
   renderFields();
@@ -276,7 +294,7 @@ function typeEditor() {
       name: form.name.value, slug: form.slug.value, description: form.description.value,
       durations: form.durations.value.split(/[,\s]+/).map(Number).filter((n) => n > 0),
       color: form.color.value, active: form.active.checked,
-      location_type: form.location_type.value, location_value: form.location_value.value,
+      locations: $$('input[name=loc]:checked', form).map((c) => ({ type: c.value, value: form.querySelector(`[data-locval=${c.value}]`)?.value || '' })),
       calendar_ref: form.calendar_ref.value ? Number(form.calendar_ref.value) : null,
       slot_mode: form.slot_mode.value, slot_interval: Number(form.slot_interval.value), free_granularity: Number(form.free_granularity.value),
       buffer_before: Number(form.buffer_before.value), buffer_after: Number(form.buffer_after.value),

@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS meeting_types (
   daily_limit INTEGER NOT NULL DEFAULT 0,          -- 0 = unlimited
   schedule TEXT NOT NULL,                          -- JSON {"0":[[540,1020]], ...} weekday (0=Sun) -> [[startMin,endMin]]
   calendar_ref INTEGER REFERENCES calendars(id) ON DELETE SET NULL, -- NULL = default calendar
-  location_type TEXT NOT NULL DEFAULT 'google_meet', -- google_meet | phone | in_person | custom | none
-  location_value TEXT DEFAULT '',
+  location_type TEXT NOT NULL DEFAULT 'google_meet', -- legacy, replaced by "locations"
+  location_value TEXT DEFAULT '',                     -- legacy
   fields TEXT NOT NULL DEFAULT '[]',               -- JSON custom questions
   require_phone INTEGER NOT NULL DEFAULT 0,
   client_reminder_channels TEXT NOT NULL DEFAULT '["email"]',
@@ -123,6 +123,20 @@ CREATE TABLE IF NOT EXISTS transcripts (
 );
 `);
 
+// ---- migrations (add columns to existing databases) ----
+function addColumn(table, col, def) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+// Meeting types can offer several locations; the client picks one when there is more than one.
+addColumn('meeting_types', 'locations', "TEXT NOT NULL DEFAULT '[]'"); // [{type, value}] type: google_meet|zoom|phone|in_person|custom
+addColumn('bookings', 'location_type', 'TEXT');
+addColumn('bookings', 'zoom_meeting_id', 'TEXT');
+if (db.prepare('PRAGMA user_version').get().user_version < 1) {
+  // One-time: copy the old single location into the new list.
+  db.exec(`UPDATE meeting_types SET locations = json_array(json_object('type', location_type, 'value', COALESCE(location_value, '')))
+           WHERE locations = '[]' AND location_type <> 'none'; PRAGMA user_version = 1;`);
+}
+
 // ---- helpers ----
 export const all = (sql, ...p) => db.prepare(sql).all(...p);
 export const get = (sql, ...p) => db.prepare(sql).get(...p);
@@ -158,7 +172,7 @@ export function setSettings(obj) {
 }
 
 const JSON_COLS = {
-  meeting_types: ['durations', 'schedule', 'fields', 'client_reminder_channels', 'client_reminder_options',
+  meeting_types: ['durations', 'schedule', 'fields', 'locations', 'client_reminder_channels', 'client_reminder_options',
     'client_reminder_defaults', 'owner_reminders', 'owner_reminder_channels'],
   bookings: ['answers', 'reminder_channels', 'reminder_offsets'],
 };

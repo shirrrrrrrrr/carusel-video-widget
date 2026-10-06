@@ -194,3 +194,39 @@ test('Contreal webhook with transcript + summary + tasks lands ready for approva
   assert.match(tr.data.summary, /We discussed X\.[\s\S]*• Send proposal/);
   assert.equal(tr.data.sent_at, null);
 });
+
+test('meeting type offers Meet / Zoom / phone and the client chooses', async () => {
+  const all = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, [[0, 1440]]]));
+  const base = { name: 'Choice', slug: 'choice', durations: [30], slot_interval: 30, min_notice: 0, schedule: all };
+  // Zoom needs a link when the Zoom API isn't configured
+  assert.equal((await call('/api/admin/types', { method: 'POST', auth: true, body: { ...base, locations: [{ type: 'zoom', value: '' }] } })).status, 400);
+  const created = await call('/api/admin/types', { method: 'POST', auth: true, body: { ...base,
+    locations: [{ type: 'google_meet' }, { type: 'zoom', value: 'https://zoom.us/j/123456' }, { type: 'phone' }, { type: 'bogus' }] } });
+  assert.equal(created.status, 201);
+  const pub = (await call('/api/public/types/choice')).data;
+  assert.deepEqual(pub.locations.map((l) => l.type), ['google_meet', 'zoom', 'phone']);
+  assert.equal(pub.locations[1].value, ''); // link not exposed before booking
+
+  const slots = (await call('/api/public/types/choice/availability')).data.days.flatMap((d) => d.slots);
+  const book = (start, extra) => call('/api/public/types/choice/book', { method: 'POST', body: { start, duration: 30, name: 'Noa', email: 'noa@example.com', ...extra } });
+
+  assert.equal((await book(slots[40], { location_type: 'teams' })).status, 400);
+  assert.equal((await book(slots[40], { location_type: 'phone' })).status, 400); // phone number required
+
+  const z = await book(slots[40], { location_type: 'zoom' });
+  assert.equal(z.status, 201);
+  const zb = (await call(`/api/public/bookings/${z.data.token}`)).data;
+  assert.equal(zb.location_type, 'zoom');
+  assert.equal(zb.meet_link, 'https://zoom.us/j/123456');
+
+  const p = await book(slots[44], { location_type: 'phone', phone: '+972521112233' });
+  assert.equal(p.status, 201);
+  const pb = (await call(`/api/public/bookings/${p.data.token}`)).data;
+  assert.equal(pb.location_type, 'phone');
+  assert.match(pb.location, /\+972521112233/);
+});
+
+test('legacy meeting types were migrated to the locations list', async () => {
+  const st = await call('/api/admin/state', { auth: true });
+  assert.deepEqual(st.data.types.find((t) => t.slug === 'intro').locations.map((l) => l.type), ['google_meet']);
+});
