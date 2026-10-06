@@ -106,6 +106,7 @@ function adminState() {
       baseUrl: config.baseUrl,
       webhooks: {
         transcript: `${config.baseUrl}/api/webhooks/transcript?key=…`,
+        contreal: `${config.baseUrl}/api/webhooks/contreal?key=…`,
         fireflies: `${config.baseUrl}/api/webhooks/fireflies`,
         summary: `${config.baseUrl}/api/webhooks/summary?key=…`,
       },

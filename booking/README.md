@@ -78,15 +78,20 @@ POST /api/webhooks/transcript?key=TRANSCRIPT_WEBHOOK_SECRET
    You can also write or paste the summary yourself.
 5. Edit the summary, then click **Approve & send to client**. Nothing is sent without that click.
 
-### Contreal (קונטריל)
+### Contreal (קונטריל): transcript + summary
 
-[Contreal](https://contreal.io/) joins the Meet/Zoom meetings on your calendar by itself, then transcribes and summarizes them.
-So you don't need the "Invite my notetaker" option: connect Contreal to the Google Calendar where bookings are saved
-(every booking gets a Meet link automatically).
+[Contreal](https://contreal.io/) joins the Meet/Zoom meetings on your calendar by itself, then transcribes **and** summarizes,
+so no separate summary tool or "Invite my notetaker" setting is needed:
 
-Until a direct connection exists: **Transcripts → Paste transcript / Contreal summary**, choose the booking, paste
-Contreal's summary, edit it, then **Approve & send**. If Contreal can send a webhook (or works with Zapier/Make),
-point it at `/api/webhooks/transcript` (full transcript) or `/api/webhooks/summary` (summary).
+1. Connect Contreal to the Google Calendar where bookings are saved (every booking gets a Meet link automatically).
+2. Have Contreal (or Zapier/Make) POST its result to `/api/webhooks/contreal?key=TRANSCRIPT_WEBHOOK_SECRET`, e.g.
+   `{"id": "...", "title": "...", "start_time": "...", "meeting_url": "...", "transcript": "...", "summary": "...", "tasks": ["..."]}`.
+   Common field names are accepted (`transcription`, `recap`, `action_items`, …). Tasks are appended to the summary.
+3. The meeting appears in **Transcripts** as *Summary ready*, matched to the booking by Meet link or time.
+   Edit it, then **Approve & send to client**.
+
+No webhook yet? Use **Transcripts → Paste transcript / Contreal summary**.
+Make sure Contreal itself is **not** set to email summaries to participants, otherwise the client gets the summary before you approve it.
 
 ## Deploying
 

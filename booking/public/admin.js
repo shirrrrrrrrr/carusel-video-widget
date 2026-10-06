@@ -425,9 +425,10 @@ async function transcriptsView() {
         <td><button data-open="${t.id}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No transcripts yet.</p>'}</div>
     <details class="card"><summary><strong>Connecting your transcriber & summary tool</strong></summary>
       <div class="stack small" style="margin-top:12px">
+        <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span><strong>Contreal</strong> (transcript + summary): <code>POST ${esc(st.webhooks.contreal)}</code></div>
         <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>Generic transcript webhook (any tool / Zapier / Make): <code>POST ${esc(st.webhooks.transcript)}</code> ${st.webhookConfigured ? '' : '— set TRANSCRIPT_WEBHOOK_SECRET'}</div>
         <div><span class="status-dot ${st.firefliesConfigured ? 'on' : ''}"></span>Fireflies.ai webhook: <code>${esc(st.webhooks.fireflies)}</code></div>
-        <div><span class="status-dot ${st.summaryConfigured ? 'on' : 'off'}"></span>Summary tool endpoint ${st.summaryConfigured ? 'configured' : '— set SUMMARY_API_URL (or write summaries manually)'}; async results: <code>POST ${esc(st.webhooks.summary)}</code></div>
+        <div><span class="status-dot ${st.summaryConfigured ? 'on' : ''}"></span>Separate summary tool (optional, not needed with Contreal) ${st.summaryConfigured ? 'configured' : '— SUMMARY_API_URL not set'}; async results: <code>POST ${esc(st.webhooks.summary)}</code></div>
         <div class="muted">See README → “Transcripts & summaries” for payload formats.</div>
       </div>
     </details>`;
@@ -475,7 +476,8 @@ async function transcriptDetail(id) {
     </div>
     <div class="card stack">
       <div class="row"><h2 class="grow" style="margin:0">Summary</h2>
-        ${locked ? '' : `<button id="gen" ${S.status.summaryConfigured ? '' : 'disabled title="Set SUMMARY_API_URL"'}>✨ ${tr.summary ? 'Regenerate' : 'Generate'} with summary tool</button>`}</div>
+        ${locked || !S.status.summaryConfigured ? '' : `<button id="gen">✨ ${tr.summary ? 'Regenerate' : 'Generate'} with summary tool</button>`}</div>
+      ${tr.source === 'contreal' && tr.summary && !locked ? '<div class="muted small">Summary from Contreal — review and edit before sending.</div>' : ''}
       ${tr.error ? `<div class="error-box small">${esc(tr.error)}</div>` : ''}
       ${tr.status === 'summarizing' ? '<div class="muted small">Waiting for the summary tool… refresh in a moment.</div>' : ''}
       <textarea id="summary" rows="14" ${locked ? 'readonly' : ''} placeholder="The summary will appear here. You can also write or paste it yourself.">${esc(tr.summary || '')}</textarea>
@@ -536,7 +538,7 @@ function settingsView() {
       <div><span class="status-dot ${st.googleConfigured && S.accounts.length ? 'on' : 'off'}"></span>Google Calendar — ${S.accounts.length} account(s) connected</div>
       <div class="row"><div class="grow"><span class="status-dot ${st.emailEnabled ? 'on' : 'off'}"></span>Email — provider: <code>${esc(st.emailProvider)}</code></div><button id="testEmail" ${st.emailEnabled ? '' : 'disabled'}>Send test email</button></div>
       <div class="row"><div class="grow"><span class="status-dot ${st.whatsappEnabled ? 'on' : 'off'}"></span>WhatsApp — provider: <code>${esc(st.whatsappProvider)}</code></div><button id="testWa" ${st.whatsappEnabled ? '' : 'disabled'}>Send test WhatsApp</button></div>
-      <div><span class="status-dot ${st.summaryConfigured ? 'on' : 'off'}"></span>Summary tool</div>
+      <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>Contreal / transcript webhook ${st.webhookConfigured ? '' : '— set TRANSCRIPT_WEBHOOK_SECRET'}</div>
       <div class="muted small">Providers and API keys are configured in the <code>.env</code> file on the server.</div>
     </div>`;
   $('#sform').onsubmit = async (e) => {

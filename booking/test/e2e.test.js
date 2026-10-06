@@ -182,3 +182,15 @@ test('paste a Contreal summary without transcript', async () => {
   assert.equal(r.data.status, 'summary_ready');
   assert.equal(r.data.source, 'contreal');
 });
+
+test('Contreal webhook with transcript + summary + tasks lands ready for approval', async () => {
+  const r = await call('/api/webhooks/contreal?key=hook-key', {
+    method: 'POST', body: { id: 'c-1', title: 'Consult', transcription: 'Dana: hi', summary: 'We discussed X.', action_items: ['Send proposal', 'Book follow-up'] },
+  });
+  assert.equal(r.status, 200);
+  const tr = await call(`/api/admin/transcripts/${r.data.id}`, { auth: true });
+  assert.equal(tr.data.source, 'contreal');
+  assert.equal(tr.data.status, 'summary_ready');
+  assert.match(tr.data.summary, /We discussed X\.[\s\S]*• Send proposal/);
+  assert.equal(tr.data.sent_at, null);
+});

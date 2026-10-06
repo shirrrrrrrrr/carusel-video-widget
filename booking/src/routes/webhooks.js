@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import { hmacHex, safeEqual } from '../crypto.js';
 import { json } from '../http.js';
+import { getSettings } from '../db.js';
 import { userError } from '../bookings.js';
 import { fetchFirefliesTranscript, ingestTranscript, storeSummary } from '../transcripts.js';
 
@@ -11,23 +12,43 @@ function requireKey(req) {
 
 export function mountWebhooks(r) {
   /**
-   * Generic transcript intake. Works with any transcriber that can POST JSON (directly or via Zapier/Make/n8n):
-   * { "transcript": "...", "external_id": "abc", "title": "...", "start_time": "2026-10-06T10:00:00Z",
-   *   "meeting_url": "https://meet.google.com/xxx-yyyy-zzz", "booking_token": "(optional)", "source": "otter" }
+   * Transcript + summary intake. Works with any notetaker that can POST JSON (directly or via Zapier/Make/n8n),
+   * including tools like Contreal that transcribe AND summarize. Common field names are accepted:
+   * { "transcript" | "transcription" | "text": "..." or [{speaker, text}],
+   *   "summary" | "recap" | "overview": "...",          (optional — arrives ready for your approval)
+   *   "tasks" | "action_items": ["...", ...] or "...",   (optional — appended to the summary)
+   *   "external_id" | "id" | "meeting_id", "title", "start_time", "meeting_url", "booking_token", "source" }
+   * Nothing is sent to the client — the transcript waits in the dashboard for your approval.
    */
-  r.post('/api/webhooks/transcript', (req, res) => {
+  const intake = (defaultSource) => (req, res) => {
     requireKey(req);
     const b = req.body || {};
+    const pick = (...keys) => keys.map((k) => b[k]).find((v) => v != null && v !== '');
+    const raw = pick('transcript', 'transcription', 'text');
+    const transcript = typeof raw === 'string' ? raw
+      : Array.isArray(raw) ? raw.map((x) => (typeof x === 'string' ? x : x.speaker ? `${x.speaker}: ${x.text}` : x.text)).join('\n') : '';
+    let summary = pick('summary', 'recap', 'overview');
+    if (summary && typeof summary !== 'string') summary = summary.text || summary.overview || JSON.stringify(summary);
+    const tasks = pick('tasks', 'action_items', 'next_steps');
+    const taskLines = Array.isArray(tasks) ? tasks.map((t) => `• ${typeof t === 'string' ? t : t.text || t.title || JSON.stringify(t)}`).join('\n')
+      : typeof tasks === 'string' ? tasks : '';
+    if (taskLines) summary = `${summary ? `${summary}\n\n` : ''}${getSettings().language === 'he' ? 'משימות להמשך:' : 'Next steps:'}\n${taskLines}`;
+    if (!transcript.trim() && !summary) throw userError('transcript or summary is required');
+    const startRaw = pick('start_time', 'date', 'meeting_start');
     const id = ingestTranscript({
-      source: String(b.source || 'webhook').slice(0, 50),
-      externalId: b.external_id ? String(b.external_id) : null,
-      title: b.title, meetingUrl: b.meeting_url, bookingToken: b.booking_token,
-      start: b.start_time ? Date.parse(b.start_time) || null : null,
-      transcript: typeof b.transcript === 'string' ? b.transcript
-        : Array.isArray(b.transcript) ? b.transcript.map((x) => (x.speaker ? `${x.speaker}: ${x.text}` : x.text)).join('\n') : '',
+      source: String(b.source || defaultSource).slice(0, 50),
+      externalId: pick('external_id', 'id', 'meeting_id') != null ? String(pick('external_id', 'id', 'meeting_id')) : null,
+      title: pick('title', 'meeting_title'), meetingUrl: pick('meeting_url', 'meeting_link'), bookingToken: b.booking_token,
+      start: startRaw ? (typeof startRaw === 'number' ? startRaw : Date.parse(startRaw) || null) : null,
+      transcript: transcript.trim() || '(no transcript — summary only)',
     });
+    if (summary) {
+      try { storeSummary(id, summary); } catch { /* already sent — keep what was approved */ }
+    }
     json(res, 200, { ok: true, id });
-  });
+  };
+  r.post('/api/webhooks/transcript', intake('webhook'));
+  r.post('/api/webhooks/contreal', intake('contreal'));
 
   /** Fireflies.ai webhook: { meetingId, eventType: "Transcription completed" } signed with x-hub-signature. */
   r.post('/api/webhooks/fireflies', async (req, res) => {
