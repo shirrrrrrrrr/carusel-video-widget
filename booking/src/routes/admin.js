@@ -250,9 +250,13 @@ export function mountAdmin(r) {
   r.post('/api/admin/transcripts', (req, res) => {
     requireAdmin(req);
     const b = req.body || {};
-    const id = ingestTranscript({ source: 'manual', title: b.title, transcript: b.transcript, bookingToken: null,
+    const summary = String(b.summary || '').trim();
+    if (!String(b.transcript || '').trim() && !summary) throw userError('Paste a transcript or a summary');
+    const id = ingestTranscript({ source: String(b.source || 'manual').slice(0, 50), title: b.title,
+      transcript: String(b.transcript || '').trim() || '(no transcript — summary only)', bookingToken: null,
       start: b.booking_id ? get('SELECT start_utc FROM bookings WHERE id=?', Number(b.booking_id))?.start_utc : null });
     if (b.booking_id) run('UPDATE transcripts SET booking_id=? WHERE id=?', Number(b.booking_id), id);
+    if (summary) storeSummary(id, summary);
     json(res, 201, getTranscript(id));
   });
 

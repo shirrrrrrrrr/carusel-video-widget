@@ -78,6 +78,16 @@ POST /api/webhooks/transcript?key=TRANSCRIPT_WEBHOOK_SECRET
    You can also write or paste the summary yourself.
 5. Edit the summary, then click **Approve & send to client**. Nothing is sent without that click.
 
+### Contreal (קונטריל)
+
+[Contreal](https://contreal.io/) joins the Meet/Zoom meetings on your calendar by itself, then transcribes and summarizes them.
+So you don't need the "Invite my notetaker" option: connect Contreal to the Google Calendar where bookings are saved
+(every booking gets a Meet link automatically).
+
+Until a direct connection exists: **Transcripts → Paste transcript / Contreal summary**, choose the booking, paste
+Contreal's summary, edit it, then **Approve & send**. If Contreal can send a webhook (or works with Zapier/Make),
+point it at `/api/webhooks/transcript` (full transcript) or `/api/webhooks/summary` (summary).
+
 ## Deploying
 
 Any host that runs Node 22 and keeps a disk for the SQLite file: Railway, Render (with a disk), Fly.io (with a volume), or a small VPS.

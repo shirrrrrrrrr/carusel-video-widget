@@ -414,7 +414,7 @@ async function transcriptsView() {
   const list = await api('/api/admin/transcripts');
   const st = S.status;
   v.innerHTML = `
-    <div class="row"><h1 class="grow" style="margin:0">Transcripts</h1><button id="addTr">+ Paste a transcript</button></div>
+    <div class="row"><h1 class="grow" style="margin:0">Transcripts</h1><button id="addTr">+ Paste transcript / Contreal summary</button></div>
     <p class="muted small">When your notetaker finishes a meeting it sends the transcript here. Review it, generate a summary with your summary tool, edit it, and only then approve sending it to the client.</p>
     <div class="card table-wrap">${list.length ? `<table><thead><tr><th>Received</th><th>Meeting</th><th>Client</th><th>Status</th><th></th></tr></thead><tbody>
       ${list.map((t) => `<tr>
@@ -439,17 +439,19 @@ async function addTranscriptForm() {
   const bookings = await api('/api/admin/bookings?scope=past');
   $('#view').innerHTML = `
     <button class="link" id="back">← Transcripts</button>
-    <form class="card stack" id="trf"><h2>Paste a transcript</h2>
+    <form class="card stack" id="trf"><h2>Paste a transcript or summary</h2>
       <div><label>Booking</label><select name="booking_id"><option value="">—</option>${bookings.map((b) => `<option value="${b.id}">${esc(when(b.start_utc))} — ${esc(b.type_name)} — ${esc(b.name)}</option>`).join('')}</select></div>
       <div><label>Title</label><input name="title"></div>
-      <div><label>Transcript</label><textarea name="transcript" rows="12" required></textarea></div>
+      <div><label>Source</label><select name="source"><option value="contreal">Contreal</option><option value="manual">Other / manual</option></select></div>
+      <div><label>Transcript <span class="hint">optional if you paste a summary</span></label><textarea name="transcript" rows="8"></textarea></div>
+      <div><label>Summary <span class="hint">e.g. the summary Contreal sent you — you can still edit it before approving</span></label><textarea name="summary" rows="8"></textarea></div>
       <div><button class="primary">Save</button></div>
     </form>`;
   $('#back').onclick = () => transcriptsView();
   $('#trf').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
-    const tr = await api('/api/admin/transcripts', { method: 'POST', body: { booking_id: f.booking_id.value || null, title: f.title.value, transcript: f.transcript.value } });
+    const tr = await api('/api/admin/transcripts', { method: 'POST', body: { booking_id: f.booking_id.value || null, title: f.title.value, source: f.source.value, transcript: f.transcript.value, summary: f.summary.value } });
     transcriptId = tr.id; transcriptsView();
   };
 }

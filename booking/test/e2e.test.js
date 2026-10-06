@@ -174,3 +174,11 @@ test('admin CSRF guard rejects non-JSON writes', async () => {
   const r = await fetch(`${BASE}/api/admin/settings`, { method: 'PUT', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: 'owner_name=x' });
   assert.equal(r.status, 400);
 });
+
+test('paste a Contreal summary without transcript', async () => {
+  assert.equal((await call('/api/admin/transcripts', { method: 'POST', auth: true, body: { source: 'contreal' } })).status, 400);
+  const r = await call('/api/admin/transcripts', { method: 'POST', auth: true, body: { source: 'contreal', title: 'Call', summary: 'Summary from Contreal' } });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.status, 'summary_ready');
+  assert.equal(r.data.source, 'contreal');
+});
