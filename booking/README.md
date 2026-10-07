@@ -108,10 +108,11 @@ Reminders are sent by a **Vercel Cron** job every minute, which needs the Pro pl
 
 1. **Turso:** create a database at [turso.tech](https://turso.tech), then copy its URL (`libsql://…`) and an auth token.
 2. **Vercel:** Add New → Project → import this GitHub repo. Set **Root Directory** to `booking` and leave the framework as "Other".
-3. **Environment Variables:** `ADMIN_PASSWORD`, `APP_SECRET` (64 random hex chars), `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+3. **Region:** `vercel.json` runs the function in Dublin (`dub1`); create the Turso database in AWS EU West (Ireland) too, or change `regions` to match.
+4. **Environment Variables:** `ADMIN_PASSWORD`, `APP_SECRET` (64 random hex chars), `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
    `CRON_SECRET` (random text), plus Google / email / WhatsApp keys as needed. `BASE_URL` is optional: the production domain is detected automatically.
-4. Deploy. If something is missing, the site shows which variables to add.
-5. In Google Cloud, add `https://YOUR-DOMAIN/admin/google/callback` as an authorized redirect URI.
+5. Deploy. If something is missing, the site shows which variables to add.
+6. In Google Cloud, add `https://YOUR-DOMAIN/admin/google/callback` as an authorized redirect URI.
 
 Production deploys follow the project's production branch (Settings → Environments → Production).
 

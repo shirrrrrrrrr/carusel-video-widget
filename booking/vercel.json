@@ -1,8 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "dub1"
+  ],
   "functions": {
-    "api/index.js": { "includeFiles": "{public,src}/**", "maxDuration": 60 }
+    "api/index.js": {
+      "includeFiles": "{public,src}/**",
+      "maxDuration": 60
+    }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api?__path=/$1" }],
-  "crons": [{ "path": "/api/cron/reminders", "schedule": "* * * * *" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api?__path=/$1"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "* * * * *"
+    }
+  ]
 }
