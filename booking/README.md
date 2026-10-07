@@ -19,7 +19,7 @@ No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQL
 | Reminders | Per meeting type: channels offered (email / WhatsApp), timing options (5 min … 1 week), pre-selected defaults. The client chooses. **You** get your own reminders too (email / WhatsApp) |
 | Notifications | Confirmation + cancellation emails, a "new booking" email to you, the Google Calendar invite, a self-service cancel link |
 | Transcripts | Your notetaker is invited to the meeting automatically → its transcript arrives by webhook → you review it → "Generate summary" sends it to your summary tool → you edit → **Approve & send** |
-| Languages | Booking pages and client messages in English or Hebrew (RTL) |
+| Languages | Hebrew by default (RTL) for the dashboard, booking pages, error messages and all emails; English available (toggle in the dashboard top bar; client language in Settings) |
 
 ## Quick start
 

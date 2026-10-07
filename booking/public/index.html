@@ -15,9 +15,9 @@
       const p = await api('/api/public/profile');
       applyBranding(p);
       const S = p.strings;
-      document.title = p.owner_name;
+      document.title = p.owner_name || S.chooseMeeting;
       app.innerHTML = `
-        <header><h1>${esc(p.owner_name)}</h1>${p.welcome_text ? `<p class="muted">${esc(p.welcome_text)}</p>` : ''}</header>
+        ${p.owner_name || p.welcome_text ? `<header>${p.owner_name ? `<h1>${esc(p.owner_name)}</h1>` : ''}${p.welcome_text ? `<p class="muted">${esc(p.welcome_text)}</p>` : ''}</header>` : ''}
         <h2>${esc(S.chooseMeeting)}</h2>
         <div class="type-list">${p.types.map((t) => `
           <a class="card type-card stack" href="/book/${encodeURIComponent(t.slug)}" style="border-top-color:${esc(t.color)}">

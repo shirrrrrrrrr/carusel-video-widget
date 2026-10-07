@@ -1,35 +1,40 @@
 import { api, esc, $, $$, durationLabel, fmtDate, fmtTime } from '/common.js';
+import { ADMIN_STRINGS } from '/admin-i18n.js';
 
 const app = $('#app');
 const PRESETS = [5, 10, 15, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080];
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const FIELD_TYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', phone: 'Phone', number: 'Number', url: 'URL', select: 'Dropdown', radio: 'Multiple choice', checkbox: 'Checkbox', date: 'Date' };
-const LOCATIONS = {
-  google_meet: { label: '🎥 Google Meet', hint: 'A Meet link is created automatically for each booking.' },
-  zoom: { label: '🟦 Zoom', hint: 'Your personal Zoom link. If the Zoom API is set up in .env, a separate meeting is created per booking and this field is optional.', placeholder: 'https://zoom.us/j/…' },
-  phone: { label: '📞 Phone call', hint: 'The client must enter a phone number, and you call them.' },
-  in_person: { label: '📍 In person', hint: 'Shown to the client on the booking page.', placeholder: 'Address' },
-  custom: { label: '🔗 Other', hint: 'Any other link or instructions (Teams, WhatsApp video…).', placeholder: 'Link or details' },
-};
 const LOC_ICON = { google_meet: '🎥', zoom: '🟦', phone: '📞', in_person: '📍', custom: '🔗' };
 
 let S = null;               // admin state
 let tab = 'bookings';
 let draft = null;           // meeting type being edited
 let transcriptId = null;
+let lang = 'he';
+let T = ADMIN_STRINGS.he;
+
+function setLang(l) {
+  lang = ADMIN_STRINGS[l] ? l : 'he';
+  T = ADMIN_STRINGS[lang];
+  document.documentElement.lang = lang;
+  document.documentElement.dir = T.dir;
+  try { localStorage.setItem('adminLang', lang); } catch { /* private mode */ }
+}
+try { setLang(localStorage.getItem('adminLang') || 'he'); } catch { setLang('he'); }
 
 const toast = (msg) => {
-  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-  document.body.append(t); setTimeout(() => t.remove(), 2600);
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  document.body.append(el); setTimeout(() => el.remove(), 2600);
 };
 const tz = () => S.settings.timezone;
-const when = (ms) => `${fmtDate(ms, tz(), 'en', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} ${fmtTime(ms, tz(), 'en')}`;
+const dur = (m) => durationLabel(m, lang);
+const when = (ms) => `${fmtDate(ms, tz(), lang, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} ${fmtTime(ms, tz(), lang)}`;
 const toHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const fromHHMM = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 
 async function load() {
   try {
     S = await api('/api/admin/state');
+    setLang(S.settings.admin_language || lang);
     route();
   } catch (e) {
     if (e.status === 401) return loginView();
@@ -41,12 +46,14 @@ function loginView() {
   app.innerHTML = `
     <main class="wrap" style="max-width:380px;padding-top:80px">
       <form class="card stack" id="login">
-        <h1>Dashboard</h1>
-        <div><label for="pw">Password</label><input type="password" id="pw" autocomplete="current-password" autofocus></div>
+        <h1>${T.dashboard}</h1>
+        <div><label for="pw">${T.password}</label><input type="password" id="pw" autocomplete="current-password" autofocus></div>
         <div id="err"></div>
-        <button class="primary" type="submit">Sign in</button>
+        <button class="primary" type="submit">${T.signIn}</button>
+        <button type="button" class="link small" id="lang">${T.langToggle}</button>
       </form>
     </main>`;
+  $('#lang').onclick = () => { setLang(lang === 'he' ? 'en' : 'he'); loginView(); };
   $('#login').onsubmit = async (e) => {
     e.preventDefault();
     try { await api('/api/admin/login', { method: 'POST', body: { password: $('#pw').value } }); load(); }
@@ -65,17 +72,22 @@ function route() {
 window.addEventListener('hashchange', () => { if (S) route(); });
 
 function shell() {
-  const tabs = [['bookings', 'Bookings'], ['types', 'Meeting types'], ['calendars', 'Calendars'], ['transcripts', 'Transcripts'], ['settings', 'Settings']];
   app.innerHTML = `
     <div class="topbar"><div class="wrap">
       <strong style="margin-inline-end:12px">📅 ${esc(S.settings.owner_name)}</strong>
-      <nav class="tabs row" style="gap:2px">${tabs.map(([k, l]) => `<a href="#${k}" class="${tab === k ? 'active' : ''}">${l}${k === 'transcripts' ? ' <span id="trBadge"></span>' : ''}</a>`).join('')}</nav>
+      <nav class="tabs row" style="gap:2px">${Object.entries(T.tabs).map(([k, l]) => `<a href="#${k}" class="${tab === k ? 'active' : ''}">${l}${k === 'transcripts' ? ' <span id="trBadge"></span>' : ''}</a>`).join('')}</nav>
       <span class="grow"></span>
-      <a href="/" target="_blank" class="small">Booking page ↗</a>
-      <button class="link small" id="logout">Sign out</button>
+      <a href="/" target="_blank" class="small">${T.bookingPage}</a>
+      <button class="link small" id="langBtn">${T.langToggle}</button>
+      <button class="link small" id="logout">${T.signOut}</button>
     </div></div>
     <main class="wrap stack" id="view"></main>`;
   $('#logout').onclick = async () => { await api('/api/admin/logout', { method: 'POST', body: {} }); location.reload(); };
+  $('#langBtn').onclick = async () => {
+    setLang(lang === 'he' ? 'en' : 'he');
+    S = await api('/api/admin/settings', { method: 'PUT', body: { admin_language: lang } }).catch(() => S);
+    shell();
+  };
   ({ bookings: bookingsView, types: typesView, calendars: calendarsView, transcripts: transcriptsView, settings: settingsView })[tab]();
   api('/api/admin/transcripts').then((list) => {
     const n = list.filter((t) => ['pending_review', 'summary_ready'].includes(t.status)).length;
@@ -85,12 +97,12 @@ function shell() {
 
 function setupWarnings() {
   const w = [];
-  if (!S.status.googleConfigured) w.push('Google OAuth is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).');
-  else if (!S.accounts.length) w.push('No Google account connected yet — go to <a href="#calendars">Calendars</a>.');
-  else if (!S.settings.default_calendar) w.push('No default calendar selected — go to <a href="#calendars">Calendars</a>.');
-  for (const a of S.accounts) if (a.last_error) w.push(`Google account ${esc(a.email)}: ${esc(a.last_error)} — reconnect it in <a href="#calendars">Calendars</a>.`);
-  if (!S.status.emailEnabled) w.push('Email sending is not set up — confirmations and reminders by email will not be sent.');
-  if (!S.settings.owner_email) w.push('Set your notification email in <a href="#settings">Settings</a>.');
+  if (!S.status.googleConfigured) w.push(T.wGoogleNotConfigured);
+  else if (!S.accounts.length) w.push(T.wNoAccount);
+  else if (!S.settings.default_calendar) w.push(T.wNoDefault);
+  for (const a of S.accounts) if (a.last_error) w.push(T.wAccountError(esc(a.email), esc(a.last_error)));
+  if (!S.status.emailEnabled) w.push(T.wNoEmail);
+  if (!S.settings.owner_email) w.push(T.wNoOwnerEmail);
   return w.length ? `<div class="warn-box stack small">${w.map((x) => `<div>⚠️ ${x}</div>`).join('')}</div>` : '';
 }
 
@@ -98,32 +110,35 @@ function setupWarnings() {
 let bookingScope = 'upcoming';
 async function bookingsView() {
   const v = $('#view');
+  const scopes = { upcoming: T.upcoming, past: T.past, cancelled: T.cancelledScope };
   v.innerHTML = `${setupWarnings()}
-    <div class="row"><h1 class="grow" style="margin:0">Bookings</h1>
-      <div class="choice-row">${['upcoming', 'past', 'cancelled'].map((s) => `<button data-scope="${s}" class="${s === bookingScope ? 'sel' : ''}">${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>
+    <div class="row"><h1 class="grow" style="margin:0">${T.bookings}</h1>
+      <div class="choice-row">${Object.entries(scopes).map(([s, l]) => `<button data-scope="${s}" class="${s === bookingScope ? 'sel' : ''}">${l}</button>`).join('')}</div>
     </div>
-    <div class="card table-wrap" id="blist"><p class="muted">Loading…</p></div>`;
+    <div class="card table-wrap" id="blist"><p class="muted">${T.loading}</p></div>`;
   $$('[data-scope]').forEach((b) => b.onclick = () => { bookingScope = b.dataset.scope; bookingsView(); });
   const list = await api(`/api/admin/bookings?scope=${bookingScope}`);
   const box = $('#blist');
-  if (!list.length) { box.innerHTML = '<p class="muted">Nothing here yet.</p>'; return; }
-  box.innerHTML = `<table><thead><tr><th>When</th><th>Meeting</th><th>Client</th><th>Details</th><th></th></tr></thead><tbody>
+  if (!list.length) { box.innerHTML = `<p class="muted">${T.nothing}</p>`; return; }
+  box.innerHTML = `<table><thead><tr><th>${T.thWhen}</th><th>${T.thMeeting}</th><th>${T.thClient}</th><th>${T.thDetails}</th><th></th></tr></thead><tbody>
     ${list.map((b) => `<tr>
-      <td><strong>${esc(when(b.start_utc))}</strong><div class="muted small">${(b.end_utc - b.start_utc) / 60000} min · client tz ${esc(b.client_tz)}</div></td>
-      <td>${esc(b.type_name)}${b.meet_link ? `<div><a class="small" href="${esc(b.meet_link)}" target="_blank" rel="noopener">${b.location_type === 'zoom' ? 'Join Zoom' : 'Join Meet'}</a></div>` : b.location ? `<div class="small muted">${esc(b.location)}</div>` : ''}</td>
+      <td><strong>${esc(when(b.start_utc))}</strong><div class="muted small">${esc(T.minClientTz((b.end_utc - b.start_utc) / 60000, b.client_tz))}</div></td>
+      <td>${esc(b.type_name)}${b.meet_link ? `<div><a class="small" href="${esc(b.meet_link)}" target="_blank" rel="noopener">${b.location_type === 'zoom' ? T.joinZoom : T.joinMeet}</a></div>` : b.location ? `<div class="small muted">${esc(b.location)}</div>` : ''}</td>
       <td>${esc(b.name)}<div class="small"><a href="mailto:${esc(b.email)}">${esc(b.email)}</a></div>${b.phone ? `<div class="small" dir="ltr">${esc(b.phone)}</div>` : ''}</td>
       <td class="small">
         ${b.answers.filter((a) => a.value !== '' && a.value !== false).map((a) => `<div><span class="muted">${esc(a.label)}:</span> ${esc(a.value === true ? '✓' : a.value)}</div>`).join('')}
-        ${b.reminder_channels.length && b.reminder_offsets.length ? `<div class="muted">🔔 ${b.reminder_channels.join(' + ')} · ${b.reminder_offsets.map((m) => durationLabel(m)).join(', ')} before</div>` : '<div class="muted">🔕 no client reminders</div>'}
-        ${b.status === 'cancelled' ? `<div class="field-error">Cancelled${b.cancel_reason ? `: ${esc(b.cancel_reason)}` : ''}</div>` : ''}
+        ${b.reminder_channels.length && b.reminder_offsets.length
+          ? `<div class="muted">${esc(T.remindersInfo(b.reminder_channels.map((c) => T.channelName[c] || c).join(' + '), b.reminder_offsets.map(dur).join(', ')))}</div>`
+          : `<div class="muted">${T.noClientReminders}</div>`}
+        ${b.status === 'cancelled' ? `<div class="field-error">${T.cancelledLabel}${b.cancel_reason ? `: ${esc(b.cancel_reason)}` : ''}</div>` : ''}
       </td>
-      <td>${b.status === 'confirmed' && b.end_utc > Date.now() ? `<button class="danger small" data-cancel="${b.id}">Cancel</button>` : ''}</td>
+      <td>${b.status === 'confirmed' && b.end_utc > Date.now() ? `<button class="danger small" data-cancel="${b.id}">${T.cancel}</button>` : ''}</td>
     </tr>`).join('')}</tbody></table>`;
   $$('[data-cancel]').forEach((btn) => btn.onclick = async () => {
-    const reason = prompt('Cancel this meeting? The client will be notified.\nOptional reason:');
+    const reason = prompt(T.cancelPrompt);
     if (reason === null) return;
     btn.disabled = true;
-    try { await api(`/api/admin/bookings/${btn.dataset.cancel}/cancel`, { method: 'POST', body: { reason } }); toast('Cancelled'); bookingsView(); }
+    try { await api(`/api/admin/bookings/${btn.dataset.cancel}/cancel`, { method: 'POST', body: { reason } }); toast(T.cancelledToast); bookingsView(); }
     catch (e) { alert(e.message); btn.disabled = false; }
   });
 }
@@ -146,120 +161,121 @@ function typesView() {
   if (draft) return typeEditor();
   const v = $('#view');
   v.innerHTML = `${setupWarnings()}
-    <div class="row"><h1 class="grow" style="margin:0">Meeting types</h1><button class="primary" id="newType">+ New meeting type</button></div>
+    <div class="row"><h1 class="grow" style="margin:0">${T.types}</h1><button class="primary" id="newType">${T.newType}</button></div>
     <div class="type-list">${S.types.map((t) => `
       <div class="card type-card stack" style="border-top-color:${esc(t.color)}">
-        <div class="row"><h3 class="grow" style="margin:0">${esc(t.name)}</h3>${t.active ? '' : '<span class="pill">Hidden</span>'}</div>
-        <div class="small muted">${t.durations.map((d) => durationLabel(d)).join(' / ')} · ${t.slot_mode === 'free' ? 'any start time' : `every ${t.slot_interval} min`} · buffer ${t.buffer_before}/${t.buffer_after} min</div>
+        <div class="row"><h3 class="grow" style="margin:0">${esc(t.name)}</h3>${t.active ? '' : `<span class="pill">${T.hidden}</span>`}</div>
+        <div class="small muted">${t.durations.map(dur).join(' / ')} · ${t.slot_mode === 'free' ? T.anyStart : T.everyMin(t.slot_interval)} · ${T.buffer(t.buffer_before, t.buffer_after)}</div>
         <div class="small">${(t.locations || []).map((l) => LOC_ICON[l.type]).join(' ') || '—'}</div>
-        <div class="small"><a href="/book/${encodeURIComponent(t.slug)}" target="_blank">/book/${esc(t.slug)}</a></div>
-        <div class="row"><button data-edit="${t.id}">Edit</button><button data-copy="${esc(t.slug)}">Copy link</button><button data-dup="${t.id}">Duplicate</button></div>
+        <div class="small" dir="ltr" style="text-align:start"><a href="/book/${encodeURIComponent(t.slug)}" target="_blank">/book/${esc(t.slug)}</a></div>
+        <div class="row"><button data-edit="${t.id}">${T.edit}</button><button data-copy="${esc(t.slug)}">${T.copyLink}</button><button data-dup="${t.id}">${T.duplicate}</button></div>
       </div>`).join('')}</div>`;
   $('#newType').onclick = () => { draft = blankType(); typeEditor(); };
   $$('[data-edit]').forEach((b) => b.onclick = () => { draft = structuredClone(S.types.find((t) => t.id === Number(b.dataset.edit))); typeEditor(); });
   $$('[data-dup]').forEach((b) => b.onclick = () => {
     const t = structuredClone(S.types.find((x) => x.id === Number(b.dataset.dup)));
-    delete t.id; t.name += ' (copy)'; t.slug = ''; draft = t; typeEditor();
+    delete t.id; t.name += T.copySuffix; t.slug = ''; draft = t; typeEditor();
   });
   $$('[data-copy]').forEach((b) => b.onclick = async () => {
-    await navigator.clipboard.writeText(`${S.status.baseUrl}/book/${b.dataset.copy}`); toast('Link copied');
+    await navigator.clipboard.writeText(`${S.status.baseUrl}/book/${b.dataset.copy}`); toast(T.linkCopied);
   });
 }
 
 const minuteChecks = (name, selected, list = PRESETS) => list.map((m) =>
-  `<label class="inline"><input type="checkbox" name="${name}" value="${m}" ${selected.includes(m) ? 'checked' : ''}> ${durationLabel(m)}</label>`).join('');
+  `<label class="inline"><input type="checkbox" name="${name}" value="${m}" ${selected.includes(m) ? 'checked' : ''}> ${dur(m)}</label>`).join('');
 const channelChecks = (name, selected) => ['email', 'whatsapp'].map((c) =>
-  `<label class="inline"><input type="checkbox" name="${name}" value="${c}" ${selected.includes(c) ? 'checked' : ''}> ${c === 'email' ? 'Email' : 'WhatsApp'}</label>`).join('');
+  `<label class="inline"><input type="checkbox" name="${name}" value="${c}" ${selected.includes(c) ? 'checked' : ''}> ${T.channelName[c]}</label>`).join('');
 
 function typeEditor() {
   const d = draft;
   const writable = S.calendars.filter((c) => ['owner', 'writer'].includes(c.access_role));
   const def = S.calendars.find((c) => c.id === Number(S.settings.default_calendar));
+  const hint = (s) => `<span class="hint">${s}</span>`;
   const v = $('#view');
   v.innerHTML = `
-    <div class="row"><button class="link" id="backTypes">← Meeting types</button></div>
-    <h1>${d.id ? `Edit “${esc(d.name)}”` : 'New meeting type'}</h1>
+    <div class="row"><button class="link" id="backTypes">${T.backTypes}</button></div>
+    <h1>${d.id ? T.editTitle(esc(d.name)) : T.newTitle}</h1>
     <form id="tform" class="stack">
-      <fieldset class="stack"><legend>Basics</legend>
+      <fieldset class="stack"><legend>${T.basics}</legend>
         <div class="grid2">
-          <div><label>Name *</label><input name="name" value="${esc(d.name)}" required></div>
-          <div><label>Link</label><div class="row" style="flex-wrap:nowrap"><span class="muted small">/book/</span><input name="slug" value="${esc(d.slug)}" placeholder="auto from name"></div></div>
+          <div><label>${T.name} *</label><input name="name" value="${esc(d.name)}" required></div>
+          <div><label>${T.link}</label><div class="row" style="flex-wrap:nowrap" dir="ltr"><span class="muted small">/book/</span><input name="slug" value="${esc(d.slug)}" placeholder="${T.slugPh}"></div></div>
         </div>
-        <div><label>Description <span class="hint">shown on the booking page and in the calendar event</span></label><textarea name="description" rows="4">${esc(d.description)}</textarea></div>
+        <div><label>${T.description} ${hint(T.descHint)}</label><textarea name="description" rows="4" dir="auto">${esc(d.description)}</textarea></div>
         <div class="grid3">
-          <div><label>Duration(s) in minutes <span class="hint">comma-separated; several = client chooses</span></label><input name="durations" value="${d.durations.join(', ')}"></div>
-          <div><label>Color</label><input type="color" name="color" value="${esc(d.color)}"></div>
-          <div><label>Visible</label><label class="inline"><input type="checkbox" name="active" ${d.active ? 'checked' : ''}> Show on booking page</label></div>
+          <div><label>${T.durations} ${hint(T.durationsHint)}</label><input name="durations" value="${d.durations.join(', ')}" dir="ltr"></div>
+          <div><label>${T.color}</label><input type="color" name="color" value="${esc(d.color)}"></div>
+          <div><label>${T.visible}</label><label class="inline"><input type="checkbox" name="active" ${d.active ? 'checked' : ''}> ${T.showOnPage}</label></div>
         </div>
       </fieldset>
 
-      <fieldset class="stack"><legend>Where does the meeting happen?</legend>
-        <div class="small muted">Tick one, or several to let the client choose when booking.</div>
-        ${Object.entries(LOCATIONS).map(([k, l]) => {
+      <fieldset class="stack"><legend>${T.whereLegend}</legend>
+        <div class="small muted">${T.whereHint}</div>
+        ${Object.entries(T.loc).map(([k, l]) => {
           const cur = (d.locations || []).find((x) => x.type === k);
           return `<div class="field-item stack">
             <label class="inline" style="font-weight:600"><input type="checkbox" name="loc" value="${k}" ${cur ? 'checked' : ''}> ${l.label}</label>
-            <div class="hint">${k === 'zoom' && S.status.zoomConfigured ? 'Zoom API is connected — a new Zoom meeting is created for every booking.' : l.hint}</div>
+            <div class="hint">${k === 'zoom' && S.status.zoomConfigured ? T.zoomApiOn : l.hint}</div>
             ${l.placeholder ? `<input data-locval="${k}" value="${esc(cur?.value || '')}" placeholder="${esc(l.placeholder)}" ${cur ? '' : 'disabled'} dir="auto">` : ''}
           </div>`;
         }).join('')}
       </fieldset>
 
-      <fieldset class="stack"><legend>Calendar</legend>
-        <div><label>Save bookings to <span class="hint">the event is created in this calendar, and the invitation is sent from its Google account</span></label>
+      <fieldset class="stack"><legend>${T.calendarLegend}</legend>
+        <div><label>${T.saveTo} ${hint(T.saveToHint)}</label>
           <select name="calendar_ref">
-            <option value="">Default calendar${def ? ` — ${esc(def.summary)} (${esc(def.account_email)})` : ' (not set)'}</option>
+            <option value="">${T.defaultCal}${def ? ` — ${esc(def.summary)} (${esc(def.account_email)})` : T.notSet}</option>
             ${writable.map((c) => `<option value="${c.id}" ${d.calendar_ref === c.id ? 'selected' : ''}>${esc(c.summary)} — ${esc(c.account_email)}</option>`).join('')}
           </select>
         </div>
-        <div class="small muted">Conflicts are always checked across every calendar marked “check for conflicts” in all connected accounts.</div>
+        <div class="small muted">${T.conflictsNote}</div>
       </fieldset>
 
-      <fieldset class="stack"><legend>Times</legend>
+      <fieldset class="stack"><legend>${T.timesLegend}</legend>
         <div>
-          <label class="inline"><input type="radio" name="slot_mode" value="interval" ${d.slot_mode !== 'free' ? 'checked' : ''}> Client picks from my fixed start times</label>
-          <label class="inline"><input type="radio" name="slot_mode" value="free" ${d.slot_mode === 'free' ? 'checked' : ''}> Client chooses any start time within my hours</label>
+          <label class="inline"><input type="radio" name="slot_mode" value="interval" ${d.slot_mode !== 'free' ? 'checked' : ''}> ${T.fixedStarts}</label>
+          <label class="inline"><input type="radio" name="slot_mode" value="free" ${d.slot_mode === 'free' ? 'checked' : ''}> ${T.freeStarts}</label>
         </div>
         <div class="grid3">
-          <div id="intervalBox"><label>Start times every</label><select name="slot_interval">${[10, 15, 20, 30, 45, 60, 90, 120].map((m) => `<option value="${m}" ${d.slot_interval === m ? 'selected' : ''}>${m} minutes</option>`).join('')}</select></div>
-          <div id="granBox"><label>Round start time to</label><select name="free_granularity">${[1, 5, 10, 15].map((m) => `<option value="${m}" ${d.free_granularity === m ? 'selected' : ''}>${m} minute${m > 1 ? 's' : ''}</option>`).join('')}</select></div>
-          <div><label>Gap before <span class="hint">min, free time required before</span></label><input type="number" min="0" name="buffer_before" value="${d.buffer_before}"></div>
-          <div><label>Gap after <span class="hint">min, free time required after (e.g. 15)</span></label><input type="number" min="0" name="buffer_after" value="${d.buffer_after}"></div>
-          <div><label>Minimum notice <span class="hint">hours before the meeting</span></label><input type="number" min="0" step="0.5" name="min_notice_h" value="${d.min_notice / 60}"></div>
-          <div><label>Book up to <span class="hint">days ahead</span></label><input type="number" min="1" name="max_days_ahead" value="${d.max_days_ahead}"></div>
-          <div><label>Max per day <span class="hint">0 = unlimited</span></label><input type="number" min="0" name="daily_limit" value="${d.daily_limit}"></div>
+          <div id="intervalBox"><label>${T.startsEvery}</label><select name="slot_interval">${[10, 15, 20, 30, 45, 60, 90, 120].map((m) => `<option value="${m}" ${d.slot_interval === m ? 'selected' : ''}>${T.minutesN(m)}</option>`).join('')}</select></div>
+          <div id="granBox"><label>${T.roundTo}</label><select name="free_granularity">${[1, 5, 10, 15].map((m) => `<option value="${m}" ${d.free_granularity === m ? 'selected' : ''}>${T.minuteN(m)}</option>`).join('')}</select></div>
+          <div><label>${T.gapBefore} ${hint(T.gapBeforeHint)}</label><input type="number" min="0" name="buffer_before" value="${d.buffer_before}"></div>
+          <div><label>${T.gapAfter} ${hint(T.gapAfterHint)}</label><input type="number" min="0" name="buffer_after" value="${d.buffer_after}"></div>
+          <div><label>${T.minNotice} ${hint(T.minNoticeHint)}</label><input type="number" min="0" step="0.5" name="min_notice_h" value="${d.min_notice / 60}"></div>
+          <div><label>${T.bookAhead} ${hint(T.bookAheadHint)}</label><input type="number" min="1" name="max_days_ahead" value="${d.max_days_ahead}"></div>
+          <div><label>${T.maxPerDay} ${hint(T.maxPerDayHint)}</label><input type="number" min="0" name="daily_limit" value="${d.daily_limit}"></div>
         </div>
-        <div><label>Weekly hours <span class="hint">in your timezone (${esc(tz())})</span></label><div id="sched"></div></div>
+        <div><label>${T.weeklyHours} ${hint(T.inTz(esc(tz())))}</label><div id="sched"></div></div>
       </fieldset>
 
-      <fieldset class="stack"><legend>Questions for the client</legend>
-        <div class="small muted">Name and email are always asked.</div>
-        <label class="inline"><input type="checkbox" name="require_phone" ${d.require_phone ? 'checked' : ''}> Always ask for a phone number</label>
+      <fieldset class="stack"><legend>${T.questionsLegend}</legend>
+        <div class="small muted">${T.alwaysAsked}</div>
+        <label class="inline"><input type="checkbox" name="require_phone" ${d.require_phone ? 'checked' : ''}> ${T.alwaysPhone}</label>
         <div id="fields" class="stack"></div>
-        <div><button type="button" id="addField">+ Add question</button></div>
+        <div><button type="button" id="addField">${T.addQuestion}</button></div>
       </fieldset>
 
-      <fieldset class="stack"><legend>Reminders</legend>
-        <div><label>Client may get reminders by</label>${channelChecks('client_reminder_channels', d.client_reminder_channels)}</div>
-        <div><label>Timing options the client can choose from</label>${minuteChecks('client_reminder_options', d.client_reminder_options)}</div>
-        <div><label>Pre-selected for the client</label>${minuteChecks('client_reminder_defaults', d.client_reminder_defaults)}<div class="hint">Must also be in the options above. Leave empty to have reminders off by default.</div></div>
+      <fieldset class="stack"><legend>${T.remindersLegend}</legend>
+        <div><label>${T.clientChannels}</label>${channelChecks('client_reminder_channels', d.client_reminder_channels)}</div>
+        <div><label>${T.clientOptions}</label>${minuteChecks('client_reminder_options', d.client_reminder_options)}</div>
+        <div><label>${T.clientDefaults}</label>${minuteChecks('client_reminder_defaults', d.client_reminder_defaults)}<div class="hint">${T.clientDefaultsHint}</div></div>
         <hr style="border:none;border-top:1px solid var(--line)">
-        <div><label>Remind me by</label>${channelChecks('owner_reminder_channels', d.owner_reminder_channels)}</div>
-        <div><label>Remind me before the meeting</label>${minuteChecks('owner_reminders', d.owner_reminders)}</div>
+        <div><label>${T.ownerChannels}</label>${channelChecks('owner_reminder_channels', d.owner_reminder_channels)}</div>
+        <div><label>${T.ownerOffsets}</label>${minuteChecks('owner_reminders', d.owner_reminders)}</div>
       </fieldset>
 
-      <fieldset class="stack"><legend>Meeting transcriber</legend>
-        <label class="inline"><input type="checkbox" name="transcriber_enabled" ${d.transcriber_enabled ? 'checked' : ''}> Invite my notetaker to these meetings</label>
-        <div><label>Notetaker email <span class="hint">added as an attendee so the bot joins automatically (e.g. fred@fireflies.ai, or your Otter/tl;dv/Fathom calendar address)</span></label><input name="transcriber_email" type="email" value="${esc(d.transcriber_email)}"></div>
-        <div class="small muted">Transcripts arrive in the <a href="#transcripts">Transcripts</a> tab for your review. Nothing goes to the client until you approve it.</div>
+      <fieldset class="stack"><legend>${T.transcriberLegend}</legend>
+        <label class="inline"><input type="checkbox" name="transcriber_enabled" ${d.transcriber_enabled ? 'checked' : ''}> ${T.inviteNotetaker}</label>
+        <div><label>${T.notetakerEmail} ${hint(T.notetakerHint)}</label><input name="transcriber_email" type="email" dir="ltr" value="${esc(d.transcriber_email)}"></div>
+        <div class="small muted">${T.transcriberNote}</div>
       </fieldset>
 
       <div id="terr"></div>
       <div class="row">
-        <button class="primary" type="submit">Save</button>
-        <button type="button" id="cancelEdit">Cancel</button>
+        <button class="primary" type="submit">${T.save}</button>
+        <button type="button" id="cancelEdit">${T.cancelBtn}</button>
         <span class="grow"></span>
-        ${d.id ? '<button type="button" class="danger" id="delType">Delete</button>' : ''}
+        ${d.id ? `<button type="button" class="danger" id="delType">${T.delete}</button>` : ''}
       </div>
     </form>`;
 
@@ -281,7 +297,7 @@ function typeEditor() {
   $('#backTypes').onclick = $('#cancelEdit').onclick = () => { draft = null; typesView(); };
   $('#addField').onclick = () => { readFields(); d.fields.push({ id: `q${Date.now().toString(36)}`, label: '', type: 'text', required: false, placeholder: '', options: [] }); renderFields(); };
   if ($('#delType')) $('#delType').onclick = async () => {
-    if (!confirm(`Delete “${d.name}”? Existing bookings stay.`)) return;
+    if (!confirm(T.deleteConfirm(d.name))) return;
     S = await api(`/api/admin/types/${d.id}`, { method: 'DELETE' }); draft = null; typesView();
   };
 
@@ -307,24 +323,24 @@ function typeEditor() {
     };
     try {
       S = d.id ? await api(`/api/admin/types/${d.id}`, { method: 'PUT', body }) : await api('/api/admin/types', { method: 'POST', body });
-      draft = null; toast('Saved'); typesView();
+      draft = null; toast(T.saved); typesView();
     } catch (err) { $('#terr').innerHTML = `<div class="error-box">${esc(err.message)}</div>`; }
   };
 }
 
 function renderSchedule() {
   const box = $('#sched');
-  box.innerHTML = DAYS.map((name, wd) => `
+  box.innerHTML = T.days.map((name, wd) => `
     <div class="sched-row">
       <strong class="small" style="padding-top:8px">${name}</strong>
       <div class="ranges">
         ${(draft.schedule[wd] || []).map(([a, b], i) => `
-          <div class="range">
+          <div class="range" dir="ltr">
             <input type="time" data-wd="${wd}" data-i="${i}" data-pos="0" value="${toHHMM(a)}">–
             <input type="time" data-wd="${wd}" data-i="${i}" data-pos="1" value="${toHHMM(b === 1440 ? 1439 : b)}">
-            <button type="button" class="link" data-del="${wd}:${i}" aria-label="remove">✕</button>
-          </div>`).join('') || '<span class="muted small" style="padding-top:8px">Unavailable</span>'}
-        <div><button type="button" class="link small" data-add="${wd}">+ add hours</button></div>
+            <button type="button" class="link" data-del="${wd}:${i}" aria-label="${T.remove}">✕</button>
+          </div>`).join('') || `<span class="muted small" style="padding-top:8px">${T.unavailable}</span>`}
+        <div><button type="button" class="link small" data-add="${wd}">${T.addHours}</button></div>
       </div>
     </div>`).join('');
   $$('input[type=time]', box).forEach((inp) => inp.onchange = () => {
@@ -348,16 +364,16 @@ function renderFields() {
   box.innerHTML = draft.fields.map((f, i) => `
     <div class="field-item stack" data-field="${i}">
       <div class="grid2">
-        <div><label>Question</label><input data-f="label" value="${esc(f.label)}" placeholder="e.g. What's your company?"></div>
-        <div><label>Answer type</label><select data-f="type">${Object.entries(FIELD_TYPES).map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div><label>${T.question}</label><input data-f="label" value="${esc(f.label)}" placeholder="${esc(T.questionPh)}" dir="auto"></div>
+        <div><label>${T.answerType}</label><select data-f="type">${Object.entries(T.fieldTypes).map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       </div>
-      <div class="opts ${['select', 'radio'].includes(f.type) ? '' : 'hidden'}"><label>Options <span class="hint">one per line</span></label><textarea data-f="options" rows="3">${esc((f.options || []).join('\n'))}</textarea></div>
+      <div class="opts ${['select', 'radio'].includes(f.type) ? '' : 'hidden'}"><label>${T.options} <span class="hint">${T.optionsHint}</span></label><textarea data-f="options" rows="3" dir="auto">${esc((f.options || []).join('\n'))}</textarea></div>
       <div class="row">
-        <div class="grow"><input data-f="placeholder" value="${esc(f.placeholder || '')}" placeholder="Placeholder (optional)"></div>
-        <label class="inline"><input type="checkbox" data-f="required" ${f.required ? 'checked' : ''}> Required</label>
+        <div class="grow"><input data-f="placeholder" value="${esc(f.placeholder || '')}" placeholder="${esc(T.placeholderPh)}" dir="auto"></div>
+        <label class="inline"><input type="checkbox" data-f="required" ${f.required ? 'checked' : ''}> ${T.required}</label>
         <button type="button" class="link" data-move="${i}:-1" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button type="button" class="link" data-move="${i}:1" ${i === draft.fields.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" class="link danger" data-rm="${i}">Remove</button>
+        <button type="button" class="link danger" data-rm="${i}">${T.remove}</button>
       </div>
     </div>`).join('');
   $$('select[data-f=type]', box).forEach((s) => s.onchange = () => {
@@ -385,69 +401,64 @@ function calendarsView() {
   const v = $('#view');
   const st = S.status;
   v.innerHTML = `
-    <div class="row"><h1 class="grow" style="margin:0">Calendars</h1>
-      ${st.googleConfigured ? '<a class="btn primary" href="/admin/google/connect">+ Connect Google account</a>' : ''}</div>
+    <div class="row"><h1 class="grow" style="margin:0">${T.calendars}</h1>
+      ${st.googleConfigured ? `<a class="btn primary" href="/admin/google/connect">${T.connectGoogle}</a>` : ''}</div>
     ${st.googleConfigured ? '' : `<div class="warn-box small stack">
-      <div><strong>Google is not configured yet.</strong></div>
-      <div>1. In Google Cloud Console create an OAuth client of type “Web application”.</div>
-      <div>2. Add this authorized redirect URI: <code>${esc(st.redirectUri)}</code></div>
-      <div>3. Enable the Google Calendar API (and Gmail API for sending email).</div>
-      <div>4. Put GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in <code>.env</code> and restart.</div></div>`}
-    <p class="muted small">Connect as many Google accounts as you like. Tick “Check for conflicts” on every calendar where you might have events — times that are busy in <em>any</em> of them won’t be offered. Choose one <strong>default</strong> calendar where new bookings are saved (each meeting type can override it).</p>
+      <div><strong>${T.googleNotConfigured}</strong></div>
+      <div>${T.gStep1}</div><div>${T.gStep2(esc(st.redirectUri))}</div><div>${T.gStep3}</div><div>${T.gStep4}</div></div>`}
+    <p class="muted small">${T.calendarsIntro}</p>
     ${S.accounts.map((a) => `
       <div class="card stack">
         <div class="row">
           <div class="grow"><strong>${esc(a.email)}</strong> <span class="muted small">${esc(a.name || '')}</span>
-            ${a.last_error ? `<div class="field-error">${esc(a.last_error)} — click “Connect Google account” and sign in with this account again.</div>` : ''}</div>
-          <button data-sync="${a.id}">Refresh list</button>
-          <button class="danger" data-rmacc="${a.id}">Disconnect</button>
+            ${a.last_error ? `<div class="field-error">${esc(a.last_error)} — ${T.reconnect}</div>` : ''}</div>
+          <button data-sync="${a.id}">${T.refreshList}</button>
+          <button class="danger" data-rmacc="${a.id}">${T.disconnect}</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Calendar</th><th>Check for conflicts</th><th>Default for new bookings</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>${T.thCalendar}</th><th>${T.thConflicts}</th><th>${T.thDefault}</th></tr></thead><tbody>
           ${S.calendars.filter((c) => c.account_id === a.id).map((c) => `<tr>
-            <td>${esc(c.summary)} ${c.is_primary ? '<span class="pill">primary</span>' : ''}<div class="muted small">${esc(c.access_role)}</div></td>
+            <td>${esc(c.summary)} ${c.is_primary ? `<span class="pill">${T.primary}</span>` : ''}<div class="muted small">${esc(c.access_role)}</div></td>
             <td><input type="checkbox" data-conf="${c.id}" ${c.check_conflicts ? 'checked' : ''}></td>
-            <td>${['owner', 'writer'].includes(c.access_role) ? `<input type="radio" name="defcal" value="${c.id}" ${Number(S.settings.default_calendar) === c.id ? 'checked' : ''}>` : '<span class="muted small">read-only</span>'}</td>
+            <td>${['owner', 'writer'].includes(c.access_role) ? `<input type="radio" name="defcal" value="${c.id}" ${Number(S.settings.default_calendar) === c.id ? 'checked' : ''}>` : `<span class="muted small">${T.readOnly}</span>`}</td>
           </tr>`).join('')}
         </tbody></table></div>
-      </div>`).join('') || (st.googleConfigured ? '<div class="card muted">No accounts connected yet.</div>' : '')}`;
-  $$('[data-conf]').forEach((c) => c.onchange = async () => { S = await api(`/api/admin/calendars/${c.dataset.conf}`, { method: 'PUT', body: { check_conflicts: c.checked } }); toast('Saved'); });
-  $$('input[name=defcal]').forEach((r) => r.onchange = async () => { S = await api('/api/admin/settings', { method: 'PUT', body: { default_calendar: r.value } }); toast('Default calendar saved'); });
+      </div>`).join('') || (st.googleConfigured ? `<div class="card muted">${T.noAccounts}</div>` : '')}`;
+  $$('[data-conf]').forEach((c) => c.onchange = async () => { S = await api(`/api/admin/calendars/${c.dataset.conf}`, { method: 'PUT', body: { check_conflicts: c.checked } }); toast(T.saved); });
+  $$('input[name=defcal]').forEach((r) => r.onchange = async () => { S = await api('/api/admin/settings', { method: 'PUT', body: { default_calendar: r.value } }); toast(T.defaultSaved); });
   $$('[data-sync]').forEach((b) => b.onclick = async () => {
     b.disabled = true;
-    try { S = await api(`/api/admin/accounts/${b.dataset.sync}/sync`, { method: 'POST', body: {} }); calendarsView(); toast('Updated'); }
+    try { S = await api(`/api/admin/accounts/${b.dataset.sync}/sync`, { method: 'POST', body: {} }); calendarsView(); toast(T.updated); }
     catch (e) { alert(e.message); b.disabled = false; }
   });
   $$('[data-rmacc]').forEach((b) => b.onclick = async () => {
-    if (!confirm('Disconnect this Google account? Its calendars will no longer be checked.')) return;
+    if (!confirm(T.disconnectConfirm)) return;
     S = await api(`/api/admin/accounts/${b.dataset.rmacc}`, { method: 'DELETE' }); calendarsView();
   });
 }
 
 // ---------------- Transcripts ----------------
-const TR_STATUS = { pending_review: ['Needs review', 'warn'], summarizing: ['Summarizing…', ''], summary_ready: ['Summary ready — approve to send', 'warn'], sent: ['Sent to client', 'ok'], dismissed: ['Dismissed', ''] };
-
 async function transcriptsView() {
   if (transcriptId) return transcriptDetail(transcriptId);
   const v = $('#view');
   const list = await api('/api/admin/transcripts');
   const st = S.status;
   v.innerHTML = `
-    <div class="row"><h1 class="grow" style="margin:0">Transcripts</h1><button id="addTr">+ Paste transcript / Contreal summary</button></div>
-    <p class="muted small">When your notetaker finishes a meeting it sends the transcript here. Review it, generate a summary with your summary tool, edit it, and only then approve sending it to the client.</p>
-    <div class="card table-wrap">${list.length ? `<table><thead><tr><th>Received</th><th>Meeting</th><th>Client</th><th>Status</th><th></th></tr></thead><tbody>
+    <div class="row"><h1 class="grow" style="margin:0">${T.transcripts}</h1><button id="addTr">${T.pasteBtn}</button></div>
+    <p class="muted small">${T.transcriptsIntro}</p>
+    <div class="card table-wrap">${list.length ? `<table><thead><tr><th>${T.thReceived}</th><th>${T.thMeeting}</th><th>${T.thClient}</th><th>${T.thStatus}</th><th></th></tr></thead><tbody>
       ${list.map((t) => `<tr>
         <td class="small">${esc(when(t.received_at))}</td>
         <td>${esc(t.type_name || t.title || '—')}<div class="muted small">${t.start_utc ? esc(when(t.start_utc)) : t.meeting_start ? esc(when(t.meeting_start)) : ''} · ${esc(t.source)}</div></td>
-        <td>${t.client_name ? `${esc(t.client_name)}<div class="small muted">${esc(t.client_email)}</div>` : '<span class="field-error small">Not linked to a booking</span>'}</td>
-        <td><span class="small">${TR_STATUS[t.status]?.[0] || t.status}</span>${t.error ? `<div class="field-error small">${esc(t.error)}</div>` : ''}</td>
-        <td><button data-open="${t.id}">Open</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">No transcripts yet.</p>'}</div>
-    <details class="card"><summary><strong>Connecting your transcriber & summary tool</strong></summary>
+        <td>${t.client_name ? `${esc(t.client_name)}<div class="small muted">${esc(t.client_email)}</div>` : `<span class="field-error small">${T.notLinked}</span>`}</td>
+        <td><span class="small">${T.trStatus[t.status] || t.status}</span>${t.error ? `<div class="field-error small">${esc(t.error)}</div>` : ''}</td>
+        <td><button data-open="${t.id}">${T.open}</button></td></tr>`).join('')}</tbody></table>` : `<p class="muted">${T.noTranscripts}</p>`}</div>
+    <details class="card"><summary><strong>${T.connectingTitle}</strong></summary>
       <div class="stack small" style="margin-top:12px">
-        <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span><strong>Contreal</strong> (transcript + summary): <code>POST ${esc(st.webhooks.contreal)}</code></div>
-        <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>Generic transcript webhook (any tool / Zapier / Make): <code>POST ${esc(st.webhooks.transcript)}</code> ${st.webhookConfigured ? '' : '— set TRANSCRIPT_WEBHOOK_SECRET'}</div>
-        <div><span class="status-dot ${st.firefliesConfigured ? 'on' : ''}"></span>Fireflies.ai webhook: <code>${esc(st.webhooks.fireflies)}</code></div>
-        <div><span class="status-dot ${st.summaryConfigured ? 'on' : ''}"></span>Separate summary tool (optional, not needed with Contreal) ${st.summaryConfigured ? 'configured' : '— SUMMARY_API_URL not set'}; async results: <code>POST ${esc(st.webhooks.summary)}</code></div>
-        <div class="muted">See README → “Transcripts & summaries” for payload formats.</div>
+        <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>${T.contrealLine(esc(st.webhooks.contreal))}</div>
+        <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>${T.genericLine(esc(st.webhooks.transcript), st.webhookConfigured)}</div>
+        <div><span class="status-dot ${st.firefliesConfigured ? 'on' : ''}"></span>${T.firefliesLine(esc(st.webhooks.fireflies))}</div>
+        <div><span class="status-dot ${st.summaryConfigured ? 'on' : ''}"></span>${T.summaryLine(st.summaryConfigured, esc(st.webhooks.summary))}</div>
+        <div class="muted">${T.readmeNote}</div>
       </div>
     </details>`;
   $$('[data-open]').forEach((b) => b.onclick = () => { transcriptId = Number(b.dataset.open); transcriptsView(); });
@@ -457,21 +468,24 @@ async function transcriptsView() {
 async function addTranscriptForm() {
   const bookings = await api('/api/admin/bookings?scope=past');
   $('#view').innerHTML = `
-    <button class="link" id="back">← Transcripts</button>
-    <form class="card stack" id="trf"><h2>Paste a transcript or summary</h2>
-      <div><label>Booking</label><select name="booking_id"><option value="">—</option>${bookings.map((b) => `<option value="${b.id}">${esc(when(b.start_utc))} — ${esc(b.type_name)} — ${esc(b.name)}</option>`).join('')}</select></div>
-      <div><label>Title</label><input name="title"></div>
-      <div><label>Source</label><select name="source"><option value="contreal">Contreal</option><option value="manual">Other / manual</option></select></div>
-      <div><label>Transcript <span class="hint">optional if you paste a summary</span></label><textarea name="transcript" rows="8"></textarea></div>
-      <div><label>Summary <span class="hint">e.g. the summary Contreal sent you — you can still edit it before approving</span></label><textarea name="summary" rows="8"></textarea></div>
-      <div><button class="primary">Save</button></div>
+    <button class="link" id="back">${T.backTranscripts}</button>
+    <form class="card stack" id="trf"><h2>${T.pasteTitle}</h2>
+      <div><label>${T.booking}</label><select name="booking_id"><option value="">—</option>${bookings.map((b) => `<option value="${b.id}">${esc(when(b.start_utc))} — ${esc(b.type_name)} — ${esc(b.name)}</option>`).join('')}</select></div>
+      <div><label>${T.title}</label><input name="title" dir="auto"></div>
+      <div><label>${T.source}</label><select name="source"><option value="contreal">Contreal / קונטריל</option><option value="manual">${T.otherManual}</option></select></div>
+      <div><label>${T.transcript} <span class="hint">${T.transcriptOptional}</span></label><textarea name="transcript" rows="8" dir="auto"></textarea></div>
+      <div><label>${T.summary} <span class="hint">${T.summaryPasteHint}</span></label><textarea name="summary" rows="8" dir="auto"></textarea></div>
+      <div id="trErr"></div>
+      <div><button class="primary">${T.save}</button></div>
     </form>`;
   $('#back').onclick = () => transcriptsView();
   $('#trf').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
-    const tr = await api('/api/admin/transcripts', { method: 'POST', body: { booking_id: f.booking_id.value || null, title: f.title.value, source: f.source.value, transcript: f.transcript.value, summary: f.summary.value } });
-    transcriptId = tr.id; transcriptsView();
+    try {
+      const tr = await api('/api/admin/transcripts', { method: 'POST', body: { booking_id: f.booking_id.value || null, title: f.title.value, source: f.source.value, transcript: f.transcript.value, summary: f.summary.value } });
+      transcriptId = tr.id; transcriptsView();
+    } catch (err) { $('#trErr').innerHTML = `<div class="error-box">${esc(err.message)}</div>`; }
   };
 }
 
@@ -481,91 +495,92 @@ async function transcriptDetail(id) {
   const b = tr.booking;
   const locked = tr.status === 'sent';
   $('#view').innerHTML = `
-    <button class="link" id="back">← Transcripts</button>
-    <div class="row"><h1 class="grow" style="margin:0">${esc(b?.type_name || tr.title || 'Transcript')}</h1><span class="pill">${TR_STATUS[tr.status]?.[0] || tr.status}</span></div>
+    <button class="link" id="back">${T.backTranscripts}</button>
+    <div class="row"><h1 class="grow" style="margin:0">${esc(b?.type_name || tr.title || T.transcript)}</h1><span class="pill">${T.trStatus[tr.status] || tr.status}</span></div>
     <div class="card stack">
       <div class="grid2">
-        <div><label>Linked booking</label>
-          <select id="link" ${locked ? 'disabled' : ''}><option value="">— not linked —</option>${bookings.map((x) => `<option value="${x.id}" ${x.id === tr.booking_id ? 'selected' : ''}>${esc(when(x.start_utc))} — ${esc(x.type_name)} — ${esc(x.name)}</option>`).join('')}</select></div>
-        <div class="small">${b ? `<div><strong>${esc(b.name)}</strong> · ${esc(b.email)}</div><div class="muted">${esc(when(b.start_utc))}</div>` : '<span class="muted">Link a booking so the summary goes to the right client.</span>'}
-          <div class="muted">Source: ${esc(tr.source)} · received ${esc(when(tr.received_at))}</div></div>
+        <div><label>${T.linkedBooking}</label>
+          <select id="link" ${locked ? 'disabled' : ''}><option value="">${T.notLinkedOpt}</option>${bookings.map((x) => `<option value="${x.id}" ${x.id === tr.booking_id ? 'selected' : ''}>${esc(when(x.start_utc))} — ${esc(x.type_name)} — ${esc(x.name)}</option>`).join('')}</select></div>
+        <div class="small">${b ? `<div><strong>${esc(b.name)}</strong> · ${esc(b.email)}</div><div class="muted">${esc(when(b.start_utc))}</div>` : `<span class="muted">${T.linkHint}</span>`}
+          <div class="muted">${esc(T.sourceReceived(tr.source, when(tr.received_at)))}</div></div>
       </div>
-      <details><summary><strong>Transcript</strong> <span class="muted small">(${tr.transcript.length.toLocaleString()} characters)</span></summary><div class="transcript-box" style="margin-top:10px">${esc(tr.transcript)}</div></details>
+      <details><summary><strong>${T.transcript}</strong> <span class="muted small">${T.chars(tr.transcript.length.toLocaleString())}</span></summary><div class="transcript-box" style="margin-top:10px" dir="auto">${esc(tr.transcript)}</div></details>
     </div>
     <div class="card stack">
-      <div class="row"><h2 class="grow" style="margin:0">Summary</h2>
-        ${locked || !S.status.summaryConfigured ? '' : `<button id="gen">✨ ${tr.summary ? 'Regenerate' : 'Generate'} with summary tool</button>`}</div>
-      ${tr.source === 'contreal' && tr.summary && !locked ? '<div class="muted small">Summary from Contreal — review and edit before sending.</div>' : ''}
+      <div class="row"><h2 class="grow" style="margin:0">${T.summary}</h2>
+        ${locked || !S.status.summaryConfigured ? '' : `<button id="gen">✨ ${tr.summary ? T.regenerate : T.generate} ${T.withTool}</button>`}</div>
+      ${tr.source === 'contreal' && tr.summary && !locked ? `<div class="muted small">${T.fromContreal}</div>` : ''}
       ${tr.error ? `<div class="error-box small">${esc(tr.error)}</div>` : ''}
-      ${tr.status === 'summarizing' ? '<div class="muted small">Waiting for the summary tool… refresh in a moment.</div>' : ''}
-      <textarea id="summary" rows="14" ${locked ? 'readonly' : ''} placeholder="The summary will appear here. You can also write or paste it yourself.">${esc(tr.summary || '')}</textarea>
-      ${locked ? `<div class="ok-box small">Sent ${esc(when(tr.sent_at))}</div>` : `
+      ${tr.status === 'summarizing' ? `<div class="muted small">${T.waitingTool}</div>` : ''}
+      <textarea id="summary" rows="14" dir="auto" ${locked ? 'readonly' : ''} placeholder="${esc(T.summaryPh)}">${esc(tr.summary || '')}</textarea>
+      ${locked ? `<div class="ok-box small">${esc(T.sentAt(when(tr.sent_at)))}</div>` : `
       <div class="grid2">
-        <div><label>Send to</label><input id="to" type="email" value="${esc(b?.email || '')}"></div>
-        <div><label>Subject <span class="hint">optional</span></label><input id="subject" placeholder="Default subject"></div>
+        <div><label>${T.sendTo}</label><input id="to" type="email" dir="ltr" value="${esc(b?.email || '')}"></div>
+        <div><label>${T.subject} <span class="hint">${T.optional}</span></label><input id="subject" dir="auto" placeholder="${esc(T.defaultSubject)}"></div>
       </div>
       <div class="row">
-        <button id="save">Save draft</button>
-        <button class="primary" id="send">✅ Approve & send to client</button>
+        <button id="save">${T.saveDraft}</button>
+        <button class="primary" id="send">${T.approveSend}</button>
         <span class="grow"></span>
-        <button class="danger" id="dismiss">Dismiss</button>
+        <button class="danger" id="dismiss">${T.dismiss}</button>
       </div>`}
     </div>`;
   $('#back').onclick = () => { transcriptId = null; transcriptsView(); };
   if (locked) return;
   $('#link').onchange = async (e) => { await api(`/api/admin/transcripts/${id}`, { method: 'PUT', body: { booking_id: e.target.value || null } }); transcriptDetail(id); };
   if ($('#gen')) $('#gen').onclick = async (e) => {
-    e.target.disabled = true; e.target.textContent = 'Generating…';
+    e.target.disabled = true; e.target.textContent = T.generating;
     try { await api(`/api/admin/transcripts/${id}/summarize`, { method: 'POST', body: {} }); } catch (err) { alert(err.message); }
     transcriptDetail(id);
   };
-  $('#save').onclick = async () => { await api(`/api/admin/transcripts/${id}`, { method: 'PUT', body: { summary: $('#summary').value } }); toast('Draft saved'); };
+  $('#save').onclick = async () => { await api(`/api/admin/transcripts/${id}`, { method: 'PUT', body: { summary: $('#summary').value } }); toast(T.draftSaved); };
   $('#send').onclick = async (e) => {
     const to = $('#to').value;
-    if (!$('#summary').value.trim()) return alert('The summary is empty.');
-    if (!confirm(`Send this summary to ${to}?`)) return;
+    if (!$('#summary').value.trim()) return alert(T.emptySummary);
+    if (!confirm(T.sendConfirm(to))) return;
     e.target.disabled = true;
     try {
       await api(`/api/admin/transcripts/${id}/send`, { method: 'POST', body: { summary: $('#summary').value, to, subject: $('#subject').value } });
-      toast('Summary sent'); transcriptDetail(id);
+      toast(T.summarySent); transcriptDetail(id);
     } catch (err) { alert(err.message); e.target.disabled = false; }
   };
-  $('#dismiss').onclick = async () => { if (!confirm('Dismiss this transcript?')) return; await api(`/api/admin/transcripts/${id}/dismiss`, { method: 'POST', body: {} }); transcriptId = null; transcriptsView(); };
+  $('#dismiss').onclick = async () => { if (!confirm(T.dismissConfirm)) return; await api(`/api/admin/transcripts/${id}/dismiss`, { method: 'POST', body: {} }); transcriptId = null; transcriptsView(); };
 }
 
 // ---------------- Settings ----------------
 function settingsView() {
   const s = S.settings, st = S.status;
+  const hint = (x) => `<span class="hint">${x}</span>`;
   let zones = []; try { zones = Intl.supportedValuesOf('timeZone'); } catch { zones = [s.timezone]; }
   $('#view').innerHTML = `
-    <h1>Settings</h1>
+    <h1>${T.settings}</h1>
     <form class="card stack" id="sform">
       <div class="grid2">
-        <div><label>Your name <span class="hint">shown on the booking page</span></label><input name="owner_name" value="${esc(s.owner_name)}"></div>
-        <div><label>Timezone <span class="hint">your working hours are in this zone</span></label><select name="timezone">${zones.map((z) => `<option ${z === s.timezone ? 'selected' : ''}>${esc(z)}</option>`).join('')}</select></div>
-        <div><label>Notification email <span class="hint">new bookings, cancellations, your reminders</span></label><input name="owner_email" type="email" value="${esc(s.owner_email)}"></div>
-        <div><label>Your WhatsApp number <span class="hint">for your own reminders, e.g. +972501234567</span></label><input name="owner_phone" dir="ltr" value="${esc(s.owner_phone)}"></div>
-        <div><label>Booking page language</label><select name="language"><option value="en" ${s.language === 'en' ? 'selected' : ''}>English</option><option value="he" ${s.language === 'he' ? 'selected' : ''}>עברית (Hebrew, RTL)</option></select></div>
-        <div><label>Brand color</label><input type="color" name="brand_color" value="${esc(s.brand_color)}"></div>
+        <div><label>${T.ownerName} ${hint(T.ownerNameHint)}</label><input name="owner_name" dir="auto" value="${esc(s.owner_name)}"></div>
+        <div><label>${T.timezone} ${hint(T.timezoneHint)}</label><select name="timezone" dir="ltr">${zones.map((z) => `<option ${z === s.timezone ? 'selected' : ''}>${esc(z)}</option>`).join('')}</select></div>
+        <div><label>${T.ownerEmail} ${hint(T.ownerEmailHint)}</label><input name="owner_email" type="email" dir="ltr" value="${esc(s.owner_email)}"></div>
+        <div><label>${T.ownerPhone} ${hint(T.ownerPhoneHint)}</label><input name="owner_phone" dir="ltr" value="${esc(s.owner_phone)}"></div>
+        <div><label>${T.pageLang}</label><select name="language"><option value="he" ${s.language === 'he' ? 'selected' : ''}>עברית</option><option value="en" ${s.language === 'en' ? 'selected' : ''}>English</option></select></div>
+        <div><label>${T.brandColor}</label><input type="color" name="brand_color" value="${esc(s.brand_color)}"></div>
       </div>
-      <div><label>Welcome text</label><textarea name="welcome_text" rows="3">${esc(s.welcome_text)}</textarea></div>
-      <div><button class="primary">Save settings</button></div>
+      <div><label>${T.welcome}</label><textarea name="welcome_text" rows="3" dir="auto">${esc(s.welcome_text)}</textarea></div>
+      <div><button class="primary">${T.saveSettings}</button></div>
     </form>
     <div class="card stack">
-      <h2>Integrations</h2>
-      <div><span class="status-dot ${st.googleConfigured && S.accounts.length ? 'on' : 'off'}"></span>Google Calendar — ${S.accounts.length} account(s) connected</div>
-      <div class="row"><div class="grow"><span class="status-dot ${st.emailEnabled ? 'on' : 'off'}"></span>Email — provider: <code>${esc(st.emailProvider)}</code></div><button id="testEmail" ${st.emailEnabled ? '' : 'disabled'}>Send test email</button></div>
-      <div class="row"><div class="grow"><span class="status-dot ${st.whatsappEnabled ? 'on' : 'off'}"></span>WhatsApp — provider: <code>${esc(st.whatsappProvider)}</code></div><button id="testWa" ${st.whatsappEnabled ? '' : 'disabled'}>Send test WhatsApp</button></div>
-      <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>Contreal / transcript webhook ${st.webhookConfigured ? '' : '— set TRANSCRIPT_WEBHOOK_SECRET'}</div>
-      <div class="muted small">Providers and API keys are configured in the <code>.env</code> file on the server.</div>
+      <h2>${T.integrations}</h2>
+      <div><span class="status-dot ${st.googleConfigured && S.accounts.length ? 'on' : 'off'}"></span>${T.googleCal(S.accounts.length)}</div>
+      <div class="row"><div class="grow"><span class="status-dot ${st.emailEnabled ? 'on' : 'off'}"></span>${T.emailProv} <code>${esc(st.emailProvider)}</code></div><button id="testEmail" ${st.emailEnabled ? '' : 'disabled'}>${T.testEmail}</button></div>
+      <div class="row"><div class="grow"><span class="status-dot ${st.whatsappEnabled ? 'on' : 'off'}"></span>${T.waProv} <code>${esc(st.whatsappProvider)}</code></div><button id="testWa" ${st.whatsappEnabled ? '' : 'disabled'}>${T.testWa}</button></div>
+      <div><span class="status-dot ${st.webhookConfigured ? 'on' : 'off'}"></span>${T.contrealWebhook(st.webhookConfigured)}</div>
+      <div class="muted small">${T.envNote}</div>
     </div>`;
   $('#sform').onsubmit = async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
-    try { S = await api('/api/admin/settings', { method: 'PUT', body }); toast('Saved'); shell(); } catch (err) { alert(err.message); }
+    try { S = await api('/api/admin/settings', { method: 'PUT', body }); toast(T.saved); shell(); } catch (err) { alert(err.message); }
   };
-  $('#testEmail').onclick = async () => { try { await api('/api/admin/test/email', { method: 'POST', body: {} }); toast(`Test email sent to ${S.settings.owner_email}`); } catch (e) { alert(e.message); } };
-  $('#testWa').onclick = async () => { try { await api('/api/admin/test/whatsapp', { method: 'POST', body: {} }); toast('Test WhatsApp sent'); } catch (e) { alert(e.message); } };
+  $('#testEmail').onclick = async () => { try { await api('/api/admin/test/email', { method: 'POST', body: {} }); toast(T.testEmailSent(S.settings.owner_email)); } catch (e) { alert(e.message); } };
+  $('#testWa').onclick = async () => { try { await api('/api/admin/test/whatsapp', { method: 'POST', body: {} }); toast(T.testWaSent); } catch (e) { alert(e.message); } };
 }
 
 load();

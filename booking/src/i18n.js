@@ -128,3 +128,75 @@ export function clientStrings(lang) {
   const s = t(lang);
   return Object.fromEntries(Object.entries(s).filter(([, v]) => typeof v === 'string'));
 }
+
+// ---- Error messages shown in the dashboard / booking page ----
+const HE_ERRORS = {
+  'A valid email is required': 'צריך להזין כתובת אימייל תקינה',
+  'A valid phone number with country code is required (e.g. +972501234567)': 'צריך להזין מספר טלפון תקין כולל קידומת מדינה (למשל ‎+972501234567)',
+  'Availability is temporarily unavailable': 'לא ניתן לטעון זמינות כרגע. נסו שוב מאוחר יותר.',
+  'Bad request': 'בקשה לא תקינה',
+  'Booking not found': 'הפגישה לא נמצאה',
+  'Could not create the Zoom meeting. Please try again later.': 'לא הצלחנו ליצור פגישת זום. נסו שוב מאוחר יותר.',
+  'Could not create the calendar event. Please try again later.': 'לא הצלחנו ליצור את האירוע ביומן. נסו שוב מאוחר יותר.',
+  'Custom location: enter the link or details': 'מיקום "אחר": צריך להזין קישור או פרטים',
+  'In person: enter the address': 'פגישה פרונטלית: צריך להזין כתובת',
+  'Invalid URL slug': 'הקישור לא תקין',
+  'Invalid duration': 'משך פגישה לא תקין',
+  'Invalid meeting location': 'אופן הפגישה שנבחר לא תקין',
+  'Invalid start time': 'שעת התחלה לא תקינה',
+  'Meeting type not found': 'סוג הפגישה לא נמצא',
+  'Name is required': 'צריך להזין שם',
+  'Name and email': 'שם ואימייל',
+  'Not found': 'לא נמצא',
+  'Paste a transcript or a summary': 'צריך להדביק תמלול או סיכום',
+  'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env first': 'קודם צריך להגדיר GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET בקובץ ‎.env',
+  'This meeting has already started': 'הפגישה כבר התחילה',
+  'Too many attempts, try again later': 'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות.',
+  'Too many requests': 'יותר מדי בקשות. נסו שוב בעוד רגע.',
+  'Unauthorized': 'צריך להתחבר מחדש',
+  'Unknown calendar': 'היומן לא נמצא',
+  'Unknown timezone': 'אזור זמן לא מוכר',
+  'Wrong password': 'סיסמה שגויה',
+  'Zoom link must start with https://': 'קישור הזום צריך להתחיל ב-https://',
+  'Zoom: enter your personal Zoom link (or set up the Zoom API in .env so a meeting is created per booking)': 'זום: צריך להזין את קישור הזום האישי שלך (או להגדיר Zoom API בקובץ ‎.env כדי שתיווצר פגישה לכל הזמנה)',
+  taken: 'השעה הזו נתפסה הרגע — בחרו שעה אחרת.',
+  'Something went wrong': 'משהו השתבש',
+  'Invalid JSON': 'בקשה לא תקינה',
+  'Payload too large': 'הקובץ גדול מדי',
+  'Transcript not found': 'התמלול לא נמצא',
+  'Summary already sent': 'הסיכום כבר נשלח',
+  'Summary is empty': 'הסיכום ריק',
+  'No recipient — link the transcript to a booking or enter an email': 'אין נמען — צריך לשייך לפגישה או להזין אימייל',
+  'No recipient email': 'אין כתובת אימייל לנמען',
+  'No Google account connected for sending email': 'אין חשבון גוגל מחובר לשליחת מיילים',
+  'Email is disabled (EMAIL_PROVIDER=none)': 'שליחת מיילים כבויה (EMAIL_PROVIDER=none)',
+  'WhatsApp is disabled (WHATSAPP_PROVIDER=none)': 'וואטסאפ כבוי (WHATSAPP_PROVIDER=none)',
+  'SUMMARY_API_URL is not configured — write the summary manually or configure the tool.': 'כלי סיכום לא מוגדר (SUMMARY_API_URL) — אפשר לכתוב את הסיכום ידנית.',
+};
+const HE_PATTERNS = [
+  [/^"(.+)" is required$/, (m) => `השדה "${m[1]}" הוא חובה`],
+  [/^Invalid choice for "(.+)"$/, (m) => `בחירה לא תקינה בשדה "${m[1]}"`],
+  [/^The link "(.+)" is already used$/, (m) => `הקישור "${m[1]}" כבר בשימוש`],
+  [/^Invalid phone number: (.*)$/, (m) => `מספר טלפון לא תקין: ${m[1]}`],
+];
+
+export function translateError(msg, lang) {
+  if (lang !== 'he' || !msg) return msg;
+  if (HE_ERRORS[msg]) return HE_ERRORS[msg];
+  for (const [re, fn] of HE_PATTERNS) { const m = msg.match(re); if (m) return fn(m); }
+  return msg;
+}
+
+// ---- Messages to the owner (you) ----
+export const OWNER_STRINGS = {
+  en: {
+    booked: 'New booking', reminder: 'Upcoming meeting', cancel: 'Booking cancelled', with: 'with',
+    when: 'When', client: 'Client', where: 'Where', reason: 'Reason', openDashboard: 'Open dashboard',
+    testSubject: 'Test email from your booking system', testBody: 'It works! 🎉', testWa: 'Test message from your booking system ✅',
+  },
+  he: {
+    booked: 'פגישה חדשה נקבעה', reminder: 'תזכורת לפגישה', cancel: 'פגישה בוטלה', with: 'עם',
+    when: 'מתי', client: 'לקוח/ה', where: 'איפה', reason: 'סיבה', openDashboard: 'ללוח הבקרה',
+    testSubject: 'מייל בדיקה ממערכת קביעת הפגישות', testBody: 'זה עובד! 🎉', testWa: 'הודעת בדיקה ממערכת קביעת הפגישות ✅',
+  },
+};

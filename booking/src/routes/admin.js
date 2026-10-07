@@ -9,6 +9,7 @@ import { normalizeSchedule } from '../availability.js';
 import { emailEnabled, emailLayout, sendEmail, sendWhatsApp, whatsappEnabled } from '../notify.js';
 import { getTranscript, ingestTranscript, listTranscripts, requestSummary, sendSummary, storeSummary } from '../transcripts.js';
 import { isValidTz } from '../time.js';
+import { OWNER_STRINGS } from '../i18n.js';
 
 const SESSION_DAYS = 30;
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10 });
@@ -147,6 +148,7 @@ export function mountAdmin(r) {
     requireAdmin(req);
     const b = req.body || {};
     if (b.timezone && !isValidTz(b.timezone)) throw userError('Unknown timezone');
+    for (const k of ['language', 'admin_language']) if (k in b && !['he', 'en'].includes(b[k])) delete b[k];
     if (b.default_calendar && !get('SELECT 1 FROM calendars WHERE id=?', Number(b.default_calendar))) throw userError('Unknown calendar');
     setSettings(b);
     clearBusyCache();
@@ -315,7 +317,8 @@ export function mountAdmin(r) {
     requireAdmin(req);
     const to = req.body?.to || getSettings().owner_email;
     try {
-      await sendEmail({ to, subject: 'Test email from your booking system', text: 'It works!', html: emailLayout({ lines: ['It works! 🎉'] }) });
+      const O = OWNER_STRINGS[getSettings().admin_language === 'en' ? 'en' : 'he'];
+      await sendEmail({ to, subject: O.testSubject, text: O.testBody, html: emailLayout({ lines: [O.testBody], dir: O === OWNER_STRINGS.he ? 'rtl' : 'ltr' }) });
     } catch (e) { throw userError(e.message, 502); }
     json(res, 200, { ok: true });
   });
@@ -324,7 +327,8 @@ export function mountAdmin(r) {
     requireAdmin(req);
     const to = req.body?.to || getSettings().owner_phone;
     try {
-      await sendWhatsApp({ to, text: 'Test message from your booking system ✅', vars: ['Test', 'Test meeting', new Date().toLocaleString(), config.baseUrl] });
+      const O = OWNER_STRINGS[getSettings().admin_language === 'en' ? 'en' : 'he'];
+      await sendWhatsApp({ to, text: O.testWa, vars: ['Test', 'Test meeting', new Date().toLocaleString(), config.baseUrl] });
     } catch (e) { throw userError(e.message, 502); }
     json(res, 200, { ok: true });
   });

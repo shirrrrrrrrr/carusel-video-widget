@@ -26,7 +26,7 @@ async function init() {
     const [profile, type] = await Promise.all([api('/api/public/profile'), api(`/api/public/types/${encodeURIComponent(slug)}`)]);
     Object.assign(state, { profile, type, S: profile.strings, L: profile.language, duration: type.durations[0], loc: type.locations[0]?.type || null });
     applyBranding(profile);
-    document.title = `${type.name} — ${profile.owner_name}`;
+    document.title = profile.owner_name ? `${type.name} — ${profile.owner_name}` : type.name;
     const now = new Date();
     state.month = { y: now.getFullYear(), m: now.getMonth() + 1 };
     render();
@@ -78,7 +78,7 @@ function infoPanel() {
   const loc = type.locations.map((l) => `${LOC_ICON[l.type]} ${l.type === 'in_person' && l.value ? l.value : locName(l.type)}`).join(' · ');
   return `
     <div class="info stack">
-      <a href="/" class="muted small">${esc(profile.owner_name)}</a>
+      <a href="/" class="muted small">${esc(profile.owner_name || (state.S.dir === 'rtl' ? '→' : '←'))}</a>
       <h1>${esc(type.name)}</h1>
       <div class="pill">⏱ ${durationLabel(state.duration, L)}</div>
       ${loc ? `<div class="muted small">${esc(loc)}</div>` : ''}

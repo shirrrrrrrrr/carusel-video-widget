@@ -148,11 +148,12 @@ export function tx(fn) {
 }
 
 const SETTING_DEFAULTS = {
-  owner_name: 'Me',
+  owner_name: '',
   owner_email: '',
   owner_phone: '',
   timezone: 'Asia/Jerusalem',
-  language: 'en',              // public pages + client messages: en | he
+  language: 'he',              // public pages + client messages: he | en
+  admin_language: 'he',        // dashboard + messages to the owner: he | en
   default_calendar: '',        // calendars.id
   brand_color: '#4f46e5',
   welcome_text: '',

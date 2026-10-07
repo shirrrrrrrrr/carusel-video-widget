@@ -230,3 +230,17 @@ test('legacy meeting types were migrated to the locations list', async () => {
   const st = await call('/api/admin/state', { auth: true });
   assert.deepEqual(st.data.types.find((t) => t.slug === 'intro').locations.map((l) => l.type), ['google_meet']);
 });
+
+test('errors are translated to Hebrew (default language)', async () => {
+  const st = await call('/api/admin/state', { auth: true });
+  assert.equal(st.data.settings.admin_language, 'he');
+  const r = await call('/api/admin/login', { method: 'POST', body: { password: 'nope' } });
+  assert.equal(r.data.error, 'סיסמה שגויה');
+  const b = await call('/api/public/types/choice/book', { method: 'POST', body: { start: 1, duration: 30, name: '', email: 'x' } });
+  assert.equal(b.data.error, 'צריך להזין שם');
+  await call('/api/admin/settings', { method: 'PUT', auth: true, body: { admin_language: 'en', language: 'xx' } });
+  const st2 = await call('/api/admin/state', { auth: true });
+  assert.equal(st2.data.settings.admin_language, 'en');
+  assert.equal(st2.data.settings.language, 'he');
+  assert.equal((await call('/api/admin/login', { method: 'POST', body: { password: 'nope' } })).data.error, 'Wrong password');
+});

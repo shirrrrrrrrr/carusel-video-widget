@@ -8,7 +8,8 @@ import { mountPublic } from './routes/public.js';
 import { mountAdmin } from './routes/admin.js';
 import { mountWebhooks } from './routes/webhooks.js';
 import { startReminderWorker } from './reminders.js';
-import { get, run } from './db.js';
+import { get, getSettings, run } from './db.js';
+import { translateError } from './i18n.js';
 
 const problems = assertConfig();
 if (problems.length) {
@@ -19,10 +20,13 @@ if (problems.length) {
 // Seed a first meeting type so the booking page isn't empty on first run.
 if (!get('SELECT 1 FROM meeting_types LIMIT 1')) {
   const weekdays = { 0: [[540, 1020]], 1: [[540, 1020]], 2: [[540, 1020]], 3: [[540, 1020]], 4: [[540, 1020]], 5: [], 6: [] };
+  const he = getSettings().language === 'he';
   run(`INSERT INTO meeting_types(slug, name, description, durations, schedule, buffer_after, fields, created_at, locations)
-       VALUES(?,?,?,?,?,?,?,?,'[{"type":"google_meet","value":""}]')`, 'intro', 'Intro call', 'A short call to get to know each other.', '[30]',
+       VALUES(?,?,?,?,?,?,?,?,'[{"type":"google_meet","value":""}]')`, 'intro',
+  he ? 'שיחת היכרות' : 'Intro call',
+  he ? 'שיחה קצרה כדי להכיר.' : 'A short call to get to know each other.', '[30]',
   JSON.stringify(weekdays), 15,
-  JSON.stringify([{ id: 'topic', label: 'What would you like to talk about?', type: 'textarea', required: false, placeholder: '', options: [] }]),
+  JSON.stringify([{ id: 'topic', label: he ? 'על מה תרצו לדבר?' : 'What would you like to talk about?', type: 'textarea', required: false, placeholder: '', options: [] }]),
   Date.now());
 }
 
@@ -55,7 +59,7 @@ const server = http.createServer(async (req, res) => {
         req.rawBody = await readBody(req);
         const ct = String(req.headers['content-type'] || '');
         if (req.rawBody.length && ct.includes('json')) {
-          try { req.body = JSON.parse(req.rawBody.toString('utf8')); } catch { return json(res, 400, { error: 'Invalid JSON' }); }
+          try { req.body = JSON.parse(req.rawBody.toString('utf8')); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400, expose: true }); }
         } else if (req.rawBody.length && ct.includes('x-www-form-urlencoded')) {
           req.body = Object.fromEntries(new URLSearchParams(req.rawBody.toString('utf8')));
         } else req.body = {};
@@ -72,7 +76,12 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     const status = e.status || 500;
     if (status >= 500 && !e.expose) console.error(e);
-    if (!res.headersSent) json(res, status, { error: e.expose ? e.message : 'Something went wrong' });
+    if (!res.headersSent) {
+      const settings = getSettings();
+      const lang = url.pathname.startsWith('/api/admin') ? settings.admin_language
+        : url.pathname.startsWith('/api/public') ? settings.language : 'en';
+      json(res, status, { error: translateError(e.expose ? e.message : 'Something went wrong', lang) });
+    }
     else res.end();
   }
 });

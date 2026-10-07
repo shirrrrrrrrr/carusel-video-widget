@@ -8,7 +8,7 @@ import { randomToken } from './crypto.js';
 import { scheduleReminders, cancelReminders } from './reminders.js';
 import { config } from './config.js';
 import { createZoomMeeting, deleteZoomMeeting, zoomConfigured } from './zoom.js';
-import { t } from './i18n.js';
+import { OWNER_STRINGS, t } from './i18n.js';
 
 const DAY = 86_400_000;
 
@@ -239,20 +239,22 @@ export function clientMessage(kind, b, type) {
 
 export function ownerMessage(kind, b) {
   const s = getSettings();
-  const when = whenText(b, s.timezone, 'en');
-  const head = { booked: 'New booking', reminder: 'Upcoming meeting', cancel: 'Booking cancelled' }[kind];
+  const lang = s.admin_language === 'en' ? 'en' : 'he';
+  const O = OWNER_STRINGS[lang];
+  const when = whenText(b, s.timezone, lang);
+  const head = { booked: O.booked, reminder: O.reminder, cancel: O.cancel }[kind];
   const lines = [
-    `${head}: ${b.type_name} with ${b.name}`,
-    `When: ${when}`,
-    `Client: ${b.name} <${b.email}>${b.phone ? ` · ${b.phone}` : ''}`,
-    ...(b.location ? [`Where: ${b.location}`] : []),
+    `${head}: ${b.type_name} ${O.with} ${b.name}`,
+    `${O.when}: ${when}`,
+    `${O.client}: ${b.name} <${b.email}>${b.phone ? ` · ${b.phone}` : ''}`,
+    ...(b.location ? [`${O.where}: ${b.location}`] : []),
     ...b.answers.filter((a) => a.value !== '' && a.value !== false).map((a) => `${a.label}: ${a.value === true ? '✓' : a.value}`),
-    ...(kind === 'cancel' && b.cancel_reason ? [`Reason: ${b.cancel_reason}`] : []),
+    ...(kind === 'cancel' && b.cancel_reason ? [`${O.reason}: ${b.cancel_reason}`] : []),
   ];
   return {
-    subject: `${head}: ${b.type_name} — ${b.name} (${formatInTz(b.start_utc, s.timezone, 'en', { weekday: 'short', year: undefined })})`,
+    subject: `${head}: ${b.type_name} — ${b.name} (${formatInTz(b.start_utc, s.timezone, lang, { weekday: 'short', year: undefined })})`,
     text: lines.join('\n'),
-    html: emailLayout({ lines, button: { url: `${config.baseUrl}/admin#bookings`, label: 'Open dashboard' } }),
+    html: emailLayout({ lines, dir: lang === 'he' ? 'rtl' : 'ltr', button: { url: `${config.baseUrl}/admin#bookings`, label: O.openDashboard } }),
     vars: [s.owner_name, `${b.type_name} — ${b.name}`, when, b.meet_link || `${config.baseUrl}/admin`],
   };
 }
