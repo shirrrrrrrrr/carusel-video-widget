@@ -5,7 +5,7 @@ for conflicts and saves each booking to the calendar you choose. It sends remind
 (the client picks whether and when). Transcripts from your notetaker come in for **your review**, and a summary
 is sent to the client **only after you approve it**.
 
-No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQLite).
+No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQLite), locally or on Vercel with Turso.
 
 ## Features
 
@@ -102,9 +102,21 @@ Make sure Contreal itself is **not** set to email summaries to participants, oth
 
 ## Deploying
 
-Any host that runs Node 22 and keeps a disk for the SQLite file: Railway, Render (with a disk), Fly.io (with a volume), or a small VPS.
-Set `BASE_URL` to the public https URL, set a strong `ADMIN_PASSWORD` and `APP_SECRET`, and keep `data/` on persistent storage.
-Reminders are sent by the running server (it checks every 30 s), so it has to run all the time, not on serverless functions.
+### Vercel (Pro plan)
+The repo includes `vercel.json` and `api/index.js`. Vercel keeps no files between requests, so data lives in **Turso** (hosted SQLite, free tier).
+Reminders are sent by a **Vercel Cron** job every minute, which needs the Pro plan; the Hobby plan only allows daily crons.
+
+1. **Turso:** create a database at [turso.tech](https://turso.tech), then copy its URL (`libsql://…`) and an auth token.
+2. **Vercel:** Add New → Project → import this GitHub repo. Set **Root Directory** to `booking` and leave the framework as "Other".
+3. **Environment Variables:** `ADMIN_PASSWORD`, `APP_SECRET` (64 random hex chars), `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+   `CRON_SECRET` (random text), plus Google / email / WhatsApp keys as needed. `BASE_URL` is optional: the production domain is detected automatically.
+4. Deploy. If something is missing, the site shows which variables to add.
+5. In Google Cloud, add `https://YOUR-DOMAIN/admin/google/callback` as an authorized redirect URI.
+
+Production deploys follow the project's production branch (Settings → Environments → Production).
+
+### Always-on servers (Railway, Render, a VPS)
+Run `npm start`. Keep `data/` on persistent storage, or set the Turso variables. Reminders are sent by the running process every 30 s.
 
 ## How availability works
 
@@ -121,7 +133,10 @@ shown, rather than risk a double booking.
 ## Project layout
 
 ```
-src/server.js        HTTP server, page routing
+src/app.js           request handler, page routing, cron endpoint (shared by local + Vercel)
+src/server.js        local HTTP server + reminder timer
+api/index.js         Vercel function entry
+src/db.js            SQLite (local file) or Turso (HTTP) driver, schema, migrations
 src/availability.js  pure slot engine (unit-tested)
 src/bookings.js      booking create/cancel, messages
 src/google.js        OAuth, calendars, free/busy, events, Gmail send

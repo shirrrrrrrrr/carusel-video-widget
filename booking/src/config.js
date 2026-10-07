@@ -28,13 +28,15 @@ function ensureEnvFile(file) {
   fs.writeFileSync(file, content, { mode: 0o600 });
   console.log(`\n✅ Created ${file}\n   Dashboard password: ${password}\n   (you can change it in the .env file)\n`);
 }
-ensureEnvFile(path.join(ROOT, '.env'));
+if (!process.env.VERCEL) ensureEnvFile(path.join(ROOT, '.env'));
 loadEnvFile(path.join(ROOT, '.env'));
 
 const env = (k, d = '') => process.env[k] ?? d;
 
 // On your own computer the address always follows PORT, so changing the port never breaks links.
 function localBaseUrl(base, port) {
+  // On Vercel the production domain is known automatically.
+  if (!base && process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   if (!base) return `http://localhost:${port}`;
   const u = base.replace(/\/$/, '');
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(u) ? u.replace(/(:\d+)?$/, `:${port}`) : u;
@@ -67,6 +69,12 @@ export const config = {
     metaTemplate: env('META_WA_TEMPLATE'),
     metaTemplateLang: env('META_WA_TEMPLATE_LANG', 'en'),
   },
+  turso: {
+    url: env('TURSO_DATABASE_URL'),
+    token: env('TURSO_AUTH_TOKEN'),
+  },
+  cronSecret: env('CRON_SECRET'),
+  serverless: Boolean(process.env.VERCEL),
   zoom: {
     accountId: env('ZOOM_ACCOUNT_ID'),
     clientId: env('ZOOM_CLIENT_ID'),
@@ -85,5 +93,11 @@ export function assertConfig() {
   const problems = [];
   if (!config.adminPassword || config.adminPassword === 'change-me') problems.push('ADMIN_PASSWORD is not set');
   if (!config.appSecret || config.appSecret.length < 32) problems.push('APP_SECRET must be at least 32 characters');
+  if (config.serverless) {
+    // Serverless disks are wiped between requests, so data must live in Turso.
+    if (!config.turso.url) problems.push('TURSO_DATABASE_URL is not set (create a free database at turso.tech)');
+    if (!config.turso.token) problems.push('TURSO_AUTH_TOKEN is not set');
+    if (!config.cronSecret) problems.push('CRON_SECRET is not set (any long random text — protects the reminder job)');
+  }
   return problems;
 }

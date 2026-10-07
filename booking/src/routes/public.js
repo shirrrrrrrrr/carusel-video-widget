@@ -18,28 +18,28 @@ export function publicType(t) {
   };
 }
 
-function activeType(slug) {
-  const t = getType('slug', slug);
+async function activeType(slug) {
+  const t = await getType('slug', slug);
   if (!t || !t.active) throw userError('Meeting type not found', 404);
   return t;
 }
 
 export function mountPublic(r) {
-  r.get('/api/public/profile', (req, res) => {
-    const s = getSettings();
-    const types = all('SELECT * FROM meeting_types WHERE active=1 ORDER BY position, id').map((t) => publicType(parseRow('meeting_types', t)));
+  r.get('/api/public/profile', async (req, res) => {
+    const s = await getSettings();
+    const types = (await all('SELECT * FROM meeting_types WHERE active=1 ORDER BY position, id')).map((t) => publicType(parseRow('meeting_types', t)));
     json(res, 200, {
       owner_name: s.owner_name, welcome_text: s.welcome_text, language: s.language, brand_color: s.brand_color,
       timezone: s.timezone, strings: clientStrings(s.language), types,
     });
   });
 
-  r.get('/api/public/types/:slug', (req, res) => json(res, 200, publicType(activeType(req.params.slug))));
+  r.get('/api/public/types/:slug', async (req, res) => json(res, 200, publicType(await activeType(req.params.slug))));
 
   r.get('/api/public/types/:slug/availability', async (req, res) => {
     if (!readLimiter(req)) throw userError('Too many requests', 429);
-    const t = activeType(req.params.slug);
-    const tz = getSettings().timezone;
+    const t = await activeType(req.params.slug);
+    const tz = (await getSettings()).timezone;
     const today = localParts(Date.now(), tz).date;
     const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
     let from = isDate(req.query.get('from')) ? req.query.get('from') : today;
@@ -59,24 +59,24 @@ export function mountPublic(r) {
 
   r.post('/api/public/types/:slug/book', async (req, res) => {
     if (!bookLimiter(req)) throw userError('Too many requests', 429);
-    const t = activeType(req.params.slug);
+    const t = await activeType(req.params.slug);
     const b = await createBooking(t, req.body || {});
     json(res, 201, { token: b.token });
   });
 
-  r.get('/api/public/bookings/:token', (req, res) => {
-    const b = getBooking('token', req.params.token);
+  r.get('/api/public/bookings/:token', async (req, res) => {
+    const b = await getBooking('token', req.params.token);
     if (!b) throw userError('Booking not found', 404);
     json(res, 200, {
       type_name: b.type_name, start_utc: b.start_utc, end_utc: b.end_utc, client_tz: b.client_tz, name: b.name,
-      status: b.status, location: b.location, location_type: b.location_type, meet_link: b.meet_link, owner_name: getSettings().owner_name,
+      status: b.status, location: b.location, location_type: b.location_type, meet_link: b.meet_link, owner_name: (await getSettings()).owner_name,
       can_cancel: b.status === 'confirmed' && b.start_utc > Date.now(),
     });
   });
 
   r.post('/api/public/bookings/:token/cancel', async (req, res) => {
     if (!bookLimiter(req)) throw userError('Too many requests', 429);
-    const b = getBooking('token', req.params.token);
+    const b = await getBooking('token', req.params.token);
     if (!b) throw userError('Booking not found', 404);
     if (b.start_utc <= Date.now()) throw userError('This meeting has already started');
     await cancelBooking(b, { reason: req.body?.reason, by: 'client' });

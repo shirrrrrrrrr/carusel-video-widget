@@ -6,20 +6,20 @@ import { gmailSend } from './google.js';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export { esc };
 
-function senderAccountId() {
+async function senderAccountId() {
   if (config.email.fromGoogleAccount) {
-    const a = get('SELECT id FROM google_accounts WHERE email = ?', config.email.fromGoogleAccount);
+    const a = await get('SELECT id FROM google_accounts WHERE email = ?', config.email.fromGoogleAccount);
     if (a) return a.id;
   }
-  const s = getSettings();
-  const cal = s.default_calendar && get('SELECT account_id FROM calendars WHERE id = ?', Number(s.default_calendar));
+  const s = await getSettings();
+  const cal = s.default_calendar && await get('SELECT account_id FROM calendars WHERE id = ?', Number(s.default_calendar));
   if (cal) return cal.account_id;
-  return get('SELECT id FROM google_accounts ORDER BY id LIMIT 1')?.id;
+  return (await get('SELECT id FROM google_accounts ORDER BY id LIMIT 1'))?.id;
 }
 
-export function emailEnabled() {
+export async function emailEnabled() {
   if (config.email.provider === 'resend') return Boolean(config.email.resendKey && config.email.resendFrom);
-  if (config.email.provider === 'gmail') return Boolean(senderAccountId());
+  if (config.email.provider === 'gmail') return Boolean(await senderAccountId());
   return false;
 }
 
@@ -31,8 +31,8 @@ export function whatsappEnabled() {
 }
 
 /** Wrap paragraphs (plain text lines) into a simple, mail-client-safe HTML layout. */
-export function emailLayout({ lines, dir = 'ltr', button }) {
-  const s = getSettings();
+export async function emailLayout({ lines, dir = 'ltr', button }) {
+  const s = await getSettings();
   const body = lines.map((l) => `<p style="margin:0 0 12px">${esc(l).replace(/\n/g, '<br>')}</p>`).join('');
   const btn = button ? `<p style="margin:20px 0"><a href="${esc(button.url)}" style="background:${esc(s.brand_color)};color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">${esc(button.label)}</a></p>` : '';
   return `<!doctype html><html><body style="margin:0;background:#f5f5f7;padding:24px;font-family:Arial,Helvetica,sans-serif">
@@ -52,7 +52,7 @@ export async function sendEmail({ to, subject, text, html, replyTo }) {
     return;
   }
   if (config.email.provider === 'gmail') {
-    const id = senderAccountId();
+    const id = await senderAccountId();
     if (!id) throw new Error('No Google account connected for sending email');
     await gmailSend(id, { to, subject, text, html, replyTo });
     return;

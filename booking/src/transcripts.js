@@ -7,36 +7,36 @@ import { t } from './i18n.js';
 const MIN = 60_000;
 
 /** Find the booking a transcript belongs to: by meeting link first, then by start time (±30 min). */
-export function matchBooking({ meetingUrl, start, bookingToken }) {
+export async function matchBooking({ meetingUrl, start, bookingToken }) {
   if (bookingToken) {
-    const b = get('SELECT id FROM bookings WHERE token=?', bookingToken);
+    const b = await get('SELECT id FROM bookings WHERE token=?', bookingToken);
     if (b) return b.id;
   }
   if (meetingUrl) {
     const code = String(meetingUrl).replace(/^https?:\/\//, '').replace(/\?.*$/, '').replace(/\/$/, '');
-    const b = get("SELECT id FROM bookings WHERE meet_link IS NOT NULL AND replace(replace(meet_link,'https://',''),'http://','') = ?", code);
+    const b = await get("SELECT id FROM bookings WHERE meet_link IS NOT NULL AND replace(replace(meet_link,'https://',''),'http://','') = ?", code);
     if (b) return b.id;
   }
   if (start) {
-    const b = get(`SELECT id FROM bookings WHERE status='confirmed' AND start_utc BETWEEN ? AND ?
+    const b = await get(`SELECT id FROM bookings WHERE status='confirmed' AND start_utc BETWEEN ? AND ?
                    ORDER BY abs(start_utc - ?) LIMIT 1`, start - 30 * MIN, start + 30 * MIN, start);
     if (b) return b.id;
   }
   return null;
 }
 
-export function ingestTranscript({ source, externalId, title, start, meetingUrl, transcript, bookingToken }) {
+export async function ingestTranscript({ source, externalId, title, start, meetingUrl, transcript, bookingToken }) {
   if (!transcript || !String(transcript).trim()) throw new Error('Empty transcript');
-  const bookingId = matchBooking({ meetingUrl, start, bookingToken });
-  const existing = externalId ? get('SELECT id FROM transcripts WHERE source=? AND external_id=?', source, externalId) : null;
+  const bookingId = await matchBooking({ meetingUrl, start, bookingToken });
+  const existing = externalId ? await get('SELECT id FROM transcripts WHERE source=? AND external_id=?', source, externalId) : null;
   if (existing) {
-    run('UPDATE transcripts SET transcript=?, title=?, meeting_start=?, meeting_url=?, booking_id=COALESCE(booking_id, ?) WHERE id=?',
+    await run('UPDATE transcripts SET transcript=?, title=?, meeting_start=?, meeting_url=?, booking_id=COALESCE(booking_id, ?) WHERE id=?',
       transcript, title || null, start || null, meetingUrl || null, bookingId, existing.id);
     return existing.id;
   }
-  return Number(run(`INSERT INTO transcripts(booking_id, source, external_id, title, meeting_start, meeting_url, transcript, received_at)
+  return Number((await run(`INSERT INTO transcripts(booking_id, source, external_id, title, meeting_start, meeting_url, transcript, received_at)
     VALUES(?,?,?,?,?,?,?,?)`, bookingId, source, externalId || null, title || null, start || null, meetingUrl || null,
-  String(transcript), Date.now()).lastInsertRowid);
+  String(transcript), Date.now())).lastInsertRowid);
 }
 
 /** Fireflies.ai: webhook only carries the meeting id, so fetch the transcript via their GraphQL API. */
@@ -64,16 +64,16 @@ export async function fetchFirefliesTranscript(meetingId) {
   };
 }
 
-export function listTranscripts() {
-  return all(`SELECT t.id, t.booking_id, t.source, t.title, t.meeting_start, t.status, t.error, t.received_at, t.sent_at,
+export async function listTranscripts() {
+  return await all(`SELECT t.id, t.booking_id, t.source, t.title, t.meeting_start, t.status, t.error, t.received_at, t.sent_at,
       b.name AS client_name, b.email AS client_email, b.type_name, b.start_utc
     FROM transcripts t LEFT JOIN bookings b ON b.id = t.booking_id ORDER BY t.received_at DESC LIMIT 200`);
 }
 
-export function getTranscript(id) {
-  const tr = get('SELECT * FROM transcripts WHERE id=?', id);
+export async function getTranscript(id) {
+  const tr = await get('SELECT * FROM transcripts WHERE id=?', id);
   if (!tr) return null;
-  tr.booking = tr.booking_id ? parseRow('bookings', get('SELECT * FROM bookings WHERE id=?', tr.booking_id)) : null;
+  tr.booking = tr.booking_id ? parseRow('bookings', await get('SELECT * FROM bookings WHERE id=?', tr.booking_id)) : null;
   return tr;
 }
 
@@ -82,10 +82,10 @@ export function getTranscript(id) {
  * later via POST /api/webhooks/summary. Nothing is ever sent to the client from here.
  */
 export async function requestSummary(id) {
-  const tr = getTranscript(id);
+  const tr = await getTranscript(id);
   if (!tr) throw new Error('Transcript not found');
   if (!config.transcripts.summaryUrl) throw new Error('SUMMARY_API_URL is not configured — write the summary manually or configure the tool.');
-  run("UPDATE transcripts SET status='summarizing', error=NULL WHERE id=?", id);
+  await run("UPDATE transcripts SET status='summarizing', error=NULL WHERE id=?", id);
   try {
     const res = await fetch(config.transcripts.summaryUrl, {
       method: 'POST',
@@ -98,7 +98,7 @@ export async function requestSummary(id) {
         title: tr.title || tr.booking?.type_name || 'Meeting',
         meeting_start: tr.meeting_start ? new Date(tr.meeting_start).toISOString() : null,
         client_name: tr.booking?.name || null,
-        language: getSettings().language,
+        language: (await getSettings()).language,
         transcript: tr.transcript,
         callback_url: `${config.baseUrl}/api/webhooks/summary?key=${encodeURIComponent(config.transcripts.webhookSecret)}`,
       }),
@@ -107,31 +107,31 @@ export async function requestSummary(id) {
     if (!res.ok) throw new Error(`Summary tool ${res.status}: ${text.slice(0, 300)}`);
     let summary = null;
     try { const j = JSON.parse(text); summary = j.summary ?? j.text ?? j.result ?? null; } catch { summary = text || null; }
-    if (summary) run("UPDATE transcripts SET summary=?, status='summary_ready' WHERE id=?", String(summary), id);
+    if (summary) await run("UPDATE transcripts SET summary=?, status='summary_ready' WHERE id=?", String(summary), id);
     // Otherwise stay in 'summarizing' until the tool calls back.
   } catch (e) {
-    run("UPDATE transcripts SET status='pending_review', error=? WHERE id=?", e.message, id);
+    await run("UPDATE transcripts SET status='pending_review', error=? WHERE id=?", e.message, id);
     throw e;
   }
-  return getTranscript(id);
+  return await getTranscript(id);
 }
 
-export function storeSummary(id, summary) {
-  const tr = get('SELECT id, status FROM transcripts WHERE id=?', id);
+export async function storeSummary(id, summary) {
+  const tr = await get('SELECT id, status FROM transcripts WHERE id=?', id);
   if (!tr) throw new Error('Transcript not found');
   if (tr.status === 'sent') throw new Error('Summary already sent');
-  run("UPDATE transcripts SET summary=?, status='summary_ready', error=NULL WHERE id=?", String(summary), id);
+  await run("UPDATE transcripts SET summary=?, status='summary_ready', error=NULL WHERE id=?", String(summary), id);
 }
 
 /** Only called when YOU click "Approve & send" in the dashboard. */
 export async function sendSummary(id, { summary, to, subject }) {
-  const tr = getTranscript(id);
+  const tr = await getTranscript(id);
   if (!tr) throw new Error('Transcript not found');
   const finalSummary = String(summary ?? tr.summary ?? '').trim();
   if (!finalSummary) throw new Error('Summary is empty');
   const recipient = to || tr.booking?.email;
   if (!recipient) throw new Error('No recipient — link the transcript to a booking or enter an email');
-  const s = getSettings();
+  const s = await getSettings();
   const L = t(s.language);
   const title = tr.booking?.type_name || tr.title || 'Meeting';
   const lines = [L.hi(tr.booking?.name || ''), L.msgSummary, finalSummary];
@@ -139,9 +139,9 @@ export async function sendSummary(id, { summary, to, subject }) {
     to: recipient,
     subject: subject || L.subjSummary(title),
     text: lines.join('\n\n'),
-    html: emailLayout({ lines, dir: L.dir }),
+    html: await emailLayout({ lines, dir: L.dir }),
     replyTo: s.owner_email || undefined,
   });
-  run("UPDATE transcripts SET summary=?, status='sent', sent_at=? WHERE id=?", finalSummary, Date.now(), id);
-  return getTranscript(id);
+  await run("UPDATE transcripts SET summary=?, status='sent', sent_at=? WHERE id=?", finalSummary, Date.now(), id);
+  return await getTranscript(id);
 }

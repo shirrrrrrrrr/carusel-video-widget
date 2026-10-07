@@ -20,7 +20,7 @@ export function mountWebhooks(r) {
    *   "external_id" | "id" | "meeting_id", "title", "start_time", "meeting_url", "booking_token", "source" }
    * Nothing is sent to the client — the transcript waits in the dashboard for your approval.
    */
-  const intake = (defaultSource) => (req, res) => {
+  const intake = (defaultSource) => async (req, res) => {
     requireKey(req);
     const b = req.body || {};
     const pick = (...keys) => keys.map((k) => b[k]).find((v) => v != null && v !== '');
@@ -32,10 +32,10 @@ export function mountWebhooks(r) {
     const tasks = pick('tasks', 'action_items', 'next_steps');
     const taskLines = Array.isArray(tasks) ? tasks.map((t) => `• ${typeof t === 'string' ? t : t.text || t.title || JSON.stringify(t)}`).join('\n')
       : typeof tasks === 'string' ? tasks : '';
-    if (taskLines) summary = `${summary ? `${summary}\n\n` : ''}${getSettings().language === 'he' ? 'משימות להמשך:' : 'Next steps:'}\n${taskLines}`;
+    if (taskLines) summary = `${summary ? `${summary}\n\n` : ''}${(await getSettings()).language === 'he' ? 'משימות להמשך:' : 'Next steps:'}\n${taskLines}`;
     if (!transcript.trim() && !summary) throw userError('transcript or summary is required');
     const startRaw = pick('start_time', 'date', 'meeting_start');
-    const id = ingestTranscript({
+    const id = await ingestTranscript({
       source: String(b.source || defaultSource).slice(0, 50),
       externalId: pick('external_id', 'id', 'meeting_id') != null ? String(pick('external_id', 'id', 'meeting_id')) : null,
       title: pick('title', 'meeting_title'), meetingUrl: pick('meeting_url', 'meeting_link'), bookingToken: b.booking_token,
@@ -43,7 +43,7 @@ export function mountWebhooks(r) {
       transcript: transcript.trim() || '(no transcript — summary only)',
     });
     if (summary) {
-      try { storeSummary(id, summary); } catch { /* already sent — keep what was approved */ }
+      try { await storeSummary(id, summary); } catch { /* already sent — keep what was approved */ }
     }
     json(res, 200, { ok: true, id });
   };
@@ -62,15 +62,15 @@ export function mountWebhooks(r) {
     if (!meetingId) throw userError('meetingId missing');
     if (eventType && !/transcription completed/i.test(eventType)) return json(res, 200, { ignored: true });
     const data = await fetchFirefliesTranscript(meetingId);
-    json(res, 200, { ok: true, id: ingestTranscript(data) });
+    json(res, 200, { ok: true, id: await ingestTranscript(data) });
   });
 
   /** Async callback from the summary tool: { transcript_id, summary }. */
-  r.post('/api/webhooks/summary', (req, res) => {
+  r.post('/api/webhooks/summary', async (req, res) => {
     requireKey(req);
     const { transcript_id: id, summary } = req.body || {};
     if (!id || !summary) throw userError('transcript_id and summary are required');
-    storeSummary(Number(id), summary);
+    await storeSummary(Number(id), summary);
     json(res, 200, { ok: true });
   });
 }

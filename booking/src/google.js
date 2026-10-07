@@ -46,34 +46,34 @@ export async function handleCallback(code) {
     headers: { authorization: `Bearer ${tok.access_token}` },
   })).json();
   if (!info.email) throw new Error('Could not read the Google account email');
-  const existing = get('SELECT id, refresh_token FROM google_accounts WHERE email = ?', info.email);
+  const existing = await get('SELECT id, refresh_token FROM google_accounts WHERE email = ?', info.email);
   const refresh = tok.refresh_token ? encrypt(tok.refresh_token) : existing?.refresh_token;
   if (!refresh) throw new Error('Google did not return a refresh token. Remove the app at myaccount.google.com/permissions and connect again.');
   const expires = Date.now() + (tok.expires_in - 60) * 1000;
   let id;
   if (existing) {
-    run('UPDATE google_accounts SET name=?, refresh_token=?, access_token=?, access_expires=?, scopes=?, last_error=NULL WHERE id=?',
+    await run('UPDATE google_accounts SET name=?, refresh_token=?, access_token=?, access_expires=?, scopes=?, last_error=NULL WHERE id=?',
       info.name || '', refresh, encrypt(tok.access_token), expires, tok.scope || '', existing.id);
     id = existing.id;
   } else {
-    id = Number(run('INSERT INTO google_accounts(email,name,refresh_token,access_token,access_expires,scopes,created_at) VALUES(?,?,?,?,?,?,?)',
-      info.email, info.name || '', refresh, encrypt(tok.access_token), expires, tok.scope || '', Date.now()).lastInsertRowid);
+    id = Number((await run('INSERT INTO google_accounts(email,name,refresh_token,access_token,access_expires,scopes,created_at) VALUES(?,?,?,?,?,?,?)',
+      info.email, info.name || '', refresh, encrypt(tok.access_token), expires, tok.scope || '', Date.now())).lastInsertRowid);
   }
   await syncCalendars(id);
   return id;
 }
 
 export async function accessToken(accountId) {
-  const acc = get('SELECT * FROM google_accounts WHERE id = ?', accountId);
+  const acc = await get('SELECT * FROM google_accounts WHERE id = ?', accountId);
   if (!acc) throw new Error(`Google account ${accountId} not found`);
   if (acc.access_token && acc.access_expires > Date.now()) return decrypt(acc.access_token);
   try {
     const tok = await tokenRequest({ refresh_token: decrypt(acc.refresh_token), grant_type: 'refresh_token' });
-    run('UPDATE google_accounts SET access_token=?, access_expires=?, last_error=NULL WHERE id=?',
+    await run('UPDATE google_accounts SET access_token=?, access_expires=?, last_error=NULL WHERE id=?',
       encrypt(tok.access_token), Date.now() + (tok.expires_in - 60) * 1000, accountId);
     return tok.access_token;
   } catch (e) {
-    run('UPDATE google_accounts SET last_error=? WHERE id=?', e.message, accountId);
+    await run('UPDATE google_accounts SET last_error=? WHERE id=?', e.message, accountId);
     throw new Error(`${acc.email}: ${e.message}`);
   }
 }
@@ -95,8 +95,8 @@ export async function syncCalendars(accountId) {
   const seen = [];
   for (const c of data.items || []) {
     seen.push(c.id);
-    const isNew = !get('SELECT 1 FROM calendars WHERE account_id=? AND calendar_id=?', accountId, c.id);
-    run(`INSERT INTO calendars(account_id, calendar_id, summary, is_primary, access_role, check_conflicts)
+    const isNew = !await get('SELECT 1 FROM calendars WHERE account_id=? AND calendar_id=?', accountId, c.id);
+    await run(`INSERT INTO calendars(account_id, calendar_id, summary, is_primary, access_role, check_conflicts)
          VALUES(?,?,?,?,?,?)
          ON CONFLICT(account_id, calendar_id) DO UPDATE SET summary=excluded.summary, is_primary=excluded.is_primary, access_role=excluded.access_role`,
       accountId, c.id, c.summaryOverride || c.summary || c.id, c.primary ? 1 : 0, c.accessRole || '',
@@ -104,8 +104,8 @@ export async function syncCalendars(accountId) {
       isNew ? (['owner', 'writer'].includes(c.accessRole) ? 1 : 0) : 0);
   }
   // Drop calendars that disappeared from the account
-  for (const c of all('SELECT id, calendar_id FROM calendars WHERE account_id=?', accountId)) {
-    if (!seen.includes(c.calendar_id)) run('DELETE FROM calendars WHERE id=?', c.id);
+  for (const c of await all('SELECT id, calendar_id FROM calendars WHERE account_id=?', accountId)) {
+    if (!seen.includes(c.calendar_id)) await run('DELETE FROM calendars WHERE id=?', c.id);
   }
 }
 
@@ -114,7 +114,7 @@ export async function syncCalendars(accountId) {
  * Throws if any account fails — we prefer to show no times over risking a double booking.
  */
 export async function getBusy(timeMinMs, timeMaxMs) {
-  const cals = all('SELECT * FROM calendars WHERE check_conflicts = 1');
+  const cals = await all('SELECT * FROM calendars WHERE check_conflicts = 1');
   const byAccount = new Map();
   for (const c of cals) {
     if (!byAccount.has(c.account_id)) byAccount.set(c.account_id, []);
@@ -158,7 +158,7 @@ export async function deleteEvent(calendarRow, eventId) {
 
 /** Send an email through the Gmail API of a connected account. */
 export async function gmailSend(accountId, { to, subject, html, text, replyTo }) {
-  const acc = get('SELECT email, name FROM google_accounts WHERE id=?', accountId);
+  const acc = await get('SELECT email, name FROM google_accounts WHERE id=?', accountId);
   const boundary = `b_${randomToken(8)}`;
   const enc = (s) => `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`;
   const mime = [

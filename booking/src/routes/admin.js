@@ -49,7 +49,7 @@ function sanitizeFields(fields) {
   })).filter((f) => f.label);
 }
 
-function sanitizeLocations(list) {
+async function sanitizeLocations(list) {
   const seen = new Set();
   const out = [];
   for (const l of Array.isArray(list) ? list : []) {
@@ -65,15 +65,15 @@ function sanitizeLocations(list) {
   return out;
 }
 
-function sanitizeType(b, existing = {}) {
+async function sanitizeType(b, existing = {}) {
   const name = String(b.name ?? existing.name ?? '').trim().slice(0, 120);
   if (!name) throw userError('Name is required');
   const slug = slugify(b.slug || existing.slug || name);
   if (!slug) throw userError('Invalid URL slug');
-  const clash = get('SELECT id FROM meeting_types WHERE slug=?', slug);
+  const clash = await get('SELECT id FROM meeting_types WHERE slug=?', slug);
   if (clash && clash.id !== existing.id) throw userError(`The link "/book/${slug}" is already used`);
   const calendarRef = b.calendar_ref ? Number(b.calendar_ref) : null;
-  if (calendarRef && !get('SELECT 1 FROM calendars WHERE id=?', calendarRef)) throw userError('Unknown calendar');
+  if (calendarRef && !await get('SELECT 1 FROM calendars WHERE id=?', calendarRef)) throw userError('Unknown calendar');
   const options = minutesList(b.client_reminder_options, []);
   return {
     slug, name,
@@ -89,7 +89,7 @@ function sanitizeType(b, existing = {}) {
     daily_limit: intIn(b.daily_limit, 0, 100, 0),
     schedule: JSON.stringify(normalizeSchedule(b.schedule)),
     calendar_ref: calendarRef,
-    locations: JSON.stringify(sanitizeLocations(b.locations)),
+    locations: JSON.stringify(await sanitizeLocations(b.locations)),
     fields: JSON.stringify(sanitizeFields(b.fields)),
     require_phone: b.require_phone ? 1 : 0,
     client_reminder_channels: JSON.stringify(channelList(b.client_reminder_channels)),
@@ -105,17 +105,17 @@ function sanitizeType(b, existing = {}) {
   };
 }
 
-function adminState() {
-  const s = getSettings();
+async function adminState() {
+  const s = await getSettings();
   return {
     settings: s,
-    accounts: all('SELECT id, email, name, last_error, created_at FROM google_accounts ORDER BY id'),
-    calendars: all('SELECT c.*, a.email AS account_email FROM calendars c JOIN google_accounts a ON a.id=c.account_id ORDER BY a.id, c.is_primary DESC, c.summary'),
-    types: all('SELECT * FROM meeting_types ORDER BY position, id').map((t) => parseRow('meeting_types', t)),
+    accounts: await all('SELECT id, email, name, last_error, created_at FROM google_accounts ORDER BY id'),
+    calendars: await all('SELECT c.*, a.email AS account_email FROM calendars c JOIN google_accounts a ON a.id=c.account_id ORDER BY a.id, c.is_primary DESC, c.summary'),
+    types: (await all('SELECT * FROM meeting_types ORDER BY position, id')).map((t) => parseRow('meeting_types', t)),
     status: {
       googleConfigured: googleConfigured(),
       redirectUri: `${config.baseUrl}/admin/google/callback`,
-      emailProvider: config.email.provider, emailEnabled: emailEnabled(),
+      emailProvider: config.email.provider, emailEnabled: await emailEnabled(),
       whatsappProvider: config.whatsapp.provider, whatsappEnabled: whatsappEnabled(),
       summaryConfigured: Boolean(config.transcripts.summaryUrl),
       zoomConfigured: zoomConfigured(),
@@ -134,29 +134,29 @@ function adminState() {
 
 export function mountAdmin(r) {
   // ---------- auth ----------
-  r.post('/api/admin/login', (req, res) => {
+  r.post('/api/admin/login', async (req, res) => {
     if (!loginLimiter(req)) throw userError('Too many attempts, try again later', 429);
     if (!config.adminPassword || !safeEqual(String(req.body?.password || ''), config.adminPassword)) throw userError('Wrong password', 401);
     setCookie(res, 'admin', sign(`admin:${Date.now() + SESSION_DAYS * 86_400_000}`), { maxAge: SESSION_DAYS * 86_400, secure: secure(), sameSite: 'Lax' });
     json(res, 200, { ok: true });
   });
-  r.post('/api/admin/logout', (req, res) => { setCookie(res, 'admin', '', { maxAge: 0 }); json(res, 200, { ok: true }); });
+  r.post('/api/admin/logout', async (req, res) => { setCookie(res, 'admin', '', { maxAge: 0 }); json(res, 200, { ok: true }); });
 
-  r.get('/api/admin/state', (req, res) => { requireAdmin(req); json(res, 200, adminState()); });
+  r.get('/api/admin/state', async (req, res) => { requireAdmin(req); json(res, 200, await adminState()); });
 
-  r.put('/api/admin/settings', (req, res) => {
+  r.put('/api/admin/settings', async (req, res) => {
     requireAdmin(req);
     const b = req.body || {};
     if (b.timezone && !isValidTz(b.timezone)) throw userError('Unknown timezone');
     for (const k of ['language', 'admin_language']) if (k in b && !['he', 'en'].includes(b[k])) delete b[k];
-    if (b.default_calendar && !get('SELECT 1 FROM calendars WHERE id=?', Number(b.default_calendar))) throw userError('Unknown calendar');
-    setSettings(b);
+    if (b.default_calendar && !await get('SELECT 1 FROM calendars WHERE id=?', Number(b.default_calendar))) throw userError('Unknown calendar');
+    await setSettings(b);
     clearBusyCache();
-    json(res, 200, adminState());
+    json(res, 200, await adminState());
   });
 
   // ---------- Google ----------
-  r.get('/admin/google/connect', (req, res) => {
+  r.get('/admin/google/connect', async (req, res) => {
     if (!isAdmin(req)) return redirect(res, '/admin');
     if (!googleConfigured()) throw userError('Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env first');
     const { url, state } = authUrl();
@@ -176,9 +176,9 @@ export function mountAdmin(r) {
     try {
       await handleCallback(req.query.get('code'));
       // First connected calendar becomes the default automatically.
-      if (!getSettings().default_calendar) {
-        const primary = get('SELECT id FROM calendars WHERE is_primary=1 ORDER BY id LIMIT 1');
-        if (primary) setSettings({ default_calendar: primary.id });
+      if (!(await getSettings()).default_calendar) {
+        const primary = await get('SELECT id FROM calendars WHERE is_primary=1 ORDER BY id LIMIT 1');
+        if (primary) await setSettings({ default_calendar: primary.id });
       }
       clearBusyCache();
       redirect(res, '/admin#calendars');
@@ -192,51 +192,51 @@ export function mountAdmin(r) {
     requireAdmin(req);
     await syncCalendars(Number(req.params.id));
     clearBusyCache();
-    json(res, 200, adminState());
+    json(res, 200, await adminState());
   });
 
-  r.delete('/api/admin/accounts/:id', (req, res) => {
+  r.delete('/api/admin/accounts/:id', async (req, res) => {
     requireAdmin(req);
-    run('DELETE FROM google_accounts WHERE id=?', Number(req.params.id));
-    const s = getSettings();
-    if (s.default_calendar && !get('SELECT 1 FROM calendars WHERE id=?', Number(s.default_calendar))) setSettings({ default_calendar: '' });
+    await run('DELETE FROM google_accounts WHERE id=?', Number(req.params.id));
+    const s = await getSettings();
+    if (s.default_calendar && !await get('SELECT 1 FROM calendars WHERE id=?', Number(s.default_calendar))) await setSettings({ default_calendar: '' });
     clearBusyCache();
-    json(res, 200, adminState());
+    json(res, 200, await adminState());
   });
 
-  r.put('/api/admin/calendars/:id', (req, res) => {
+  r.put('/api/admin/calendars/:id', async (req, res) => {
     requireAdmin(req);
-    run('UPDATE calendars SET check_conflicts=? WHERE id=?', req.body?.check_conflicts ? 1 : 0, Number(req.params.id));
+    await run('UPDATE calendars SET check_conflicts=? WHERE id=?', req.body?.check_conflicts ? 1 : 0, Number(req.params.id));
     clearBusyCache();
-    json(res, 200, adminState());
+    json(res, 200, await adminState());
   });
 
   // ---------- meeting types ----------
-  r.post('/api/admin/types', (req, res) => {
+  r.post('/api/admin/types', async (req, res) => {
     requireAdmin(req);
-    const t = sanitizeType(req.body || {});
+    const t = await sanitizeType(req.body || {});
     const cols = Object.keys(t);
-    run(`INSERT INTO meeting_types(${cols.join(',')}, created_at) VALUES(${cols.map(() => '?').join(',')}, ?)`, ...Object.values(t), Date.now());
-    json(res, 201, adminState());
+    await run(`INSERT INTO meeting_types(${cols.join(',')}, created_at) VALUES(${cols.map(() => '?').join(',')}, ?)`, ...Object.values(t), Date.now());
+    json(res, 201, await adminState());
   });
 
-  r.put('/api/admin/types/:id', (req, res) => {
+  r.put('/api/admin/types/:id', async (req, res) => {
     requireAdmin(req);
-    const existing = get('SELECT * FROM meeting_types WHERE id=?', Number(req.params.id));
+    const existing = await get('SELECT * FROM meeting_types WHERE id=?', Number(req.params.id));
     if (!existing) throw userError('Not found', 404);
-    const t = sanitizeType(req.body || {}, existing);
-    run(`UPDATE meeting_types SET ${Object.keys(t).map((k) => `${k}=?`).join(',')} WHERE id=?`, ...Object.values(t), existing.id);
-    json(res, 200, adminState());
+    const t = await sanitizeType(req.body || {}, existing);
+    await run(`UPDATE meeting_types SET ${Object.keys(t).map((k) => `${k}=?`).join(',')} WHERE id=?`, ...Object.values(t), existing.id);
+    json(res, 200, await adminState());
   });
 
-  r.delete('/api/admin/types/:id', (req, res) => {
+  r.delete('/api/admin/types/:id', async (req, res) => {
     requireAdmin(req);
-    run('DELETE FROM meeting_types WHERE id=?', Number(req.params.id));
-    json(res, 200, adminState());
+    await run('DELETE FROM meeting_types WHERE id=?', Number(req.params.id));
+    json(res, 200, await adminState());
   });
 
   // ---------- bookings ----------
-  r.get('/api/admin/bookings', (req, res) => {
+  r.get('/api/admin/bookings', async (req, res) => {
     requireAdmin(req);
     const scope = req.query.get('scope') || 'upcoming';
     const now = Date.now();
@@ -246,54 +246,54 @@ export function mountAdmin(r) {
       cancelled: ["SELECT * FROM bookings WHERE status='cancelled' AND ? > 0 ORDER BY cancelled_at DESC LIMIT 300", 1],
     }[scope];
     if (!sql) throw userError('Bad scope');
-    json(res, 200, all(sql[0], sql[1]).map((b) => parseRow('bookings', b)));
+    json(res, 200, (await all(sql[0], sql[1])).map((b) => parseRow('bookings', b)));
   });
 
-  r.get('/api/admin/bookings/:id', (req, res) => {
+  r.get('/api/admin/bookings/:id', async (req, res) => {
     requireAdmin(req);
-    const b = getBooking('id', Number(req.params.id));
+    const b = await getBooking('id', Number(req.params.id));
     if (!b) throw userError('Not found', 404);
-    b.reminders = all('SELECT * FROM reminders WHERE booking_id=? ORDER BY send_at', b.id);
+    b.reminders = await all('SELECT * FROM reminders WHERE booking_id=? ORDER BY send_at', b.id);
     json(res, 200, b);
   });
 
   r.post('/api/admin/bookings/:id/cancel', async (req, res) => {
     requireAdmin(req);
-    const b = getBooking('id', Number(req.params.id));
+    const b = await getBooking('id', Number(req.params.id));
     if (!b) throw userError('Not found', 404);
     json(res, 200, await cancelBooking(b, { reason: req.body?.reason, by: 'owner' }));
   });
 
   // ---------- transcripts ----------
-  r.get('/api/admin/transcripts', (req, res) => { requireAdmin(req); json(res, 200, listTranscripts()); });
+  r.get('/api/admin/transcripts', async (req, res) => { requireAdmin(req); json(res, 200, await listTranscripts()); });
 
-  r.post('/api/admin/transcripts', (req, res) => {
+  r.post('/api/admin/transcripts', async (req, res) => {
     requireAdmin(req);
     const b = req.body || {};
     const summary = String(b.summary || '').trim();
     if (!String(b.transcript || '').trim() && !summary) throw userError('Paste a transcript or a summary');
-    const id = ingestTranscript({ source: String(b.source || 'manual').slice(0, 50), title: b.title,
+    const id = await ingestTranscript({ source: String(b.source || 'manual').slice(0, 50), title: b.title,
       transcript: String(b.transcript || '').trim() || '(no transcript — summary only)', bookingToken: null,
-      start: b.booking_id ? get('SELECT start_utc FROM bookings WHERE id=?', Number(b.booking_id))?.start_utc : null });
-    if (b.booking_id) run('UPDATE transcripts SET booking_id=? WHERE id=?', Number(b.booking_id), id);
-    if (summary) storeSummary(id, summary);
-    json(res, 201, getTranscript(id));
+      start: b.booking_id ? (await get('SELECT start_utc FROM bookings WHERE id=?', Number(b.booking_id)))?.start_utc : null });
+    if (b.booking_id) await run('UPDATE transcripts SET booking_id=? WHERE id=?', Number(b.booking_id), id);
+    if (summary) await storeSummary(id, summary);
+    json(res, 201, await getTranscript(id));
   });
 
-  r.get('/api/admin/transcripts/:id', (req, res) => {
+  r.get('/api/admin/transcripts/:id', async (req, res) => {
     requireAdmin(req);
-    const tr = getTranscript(Number(req.params.id));
+    const tr = await getTranscript(Number(req.params.id));
     if (!tr) throw userError('Not found', 404);
     json(res, 200, tr);
   });
 
-  r.put('/api/admin/transcripts/:id', (req, res) => {
+  r.put('/api/admin/transcripts/:id', async (req, res) => {
     requireAdmin(req);
     const id = Number(req.params.id);
     const b = req.body || {};
-    if ('booking_id' in b) run('UPDATE transcripts SET booking_id=? WHERE id=?', b.booking_id ? Number(b.booking_id) : null, id);
-    if (typeof b.summary === 'string') storeSummary(id, b.summary);
-    json(res, 200, getTranscript(id));
+    if ('booking_id' in b) await run('UPDATE transcripts SET booking_id=? WHERE id=?', b.booking_id ? Number(b.booking_id) : null, id);
+    if (typeof b.summary === 'string') await storeSummary(id, b.summary);
+    json(res, 200, await getTranscript(id));
   });
 
   r.post('/api/admin/transcripts/:id/summarize', async (req, res) => {
@@ -306,28 +306,28 @@ export function mountAdmin(r) {
     try { json(res, 200, await sendSummary(Number(req.params.id), req.body || {})); } catch (e) { throw userError(e.message, 400); }
   });
 
-  r.post('/api/admin/transcripts/:id/dismiss', (req, res) => {
+  r.post('/api/admin/transcripts/:id/dismiss', async (req, res) => {
     requireAdmin(req);
-    run("UPDATE transcripts SET status='dismissed' WHERE id=?", Number(req.params.id));
-    json(res, 200, getTranscript(Number(req.params.id)));
+    await run("UPDATE transcripts SET status='dismissed' WHERE id=?", Number(req.params.id));
+    json(res, 200, await getTranscript(Number(req.params.id)));
   });
 
   // ---------- tests ----------
   r.post('/api/admin/test/email', async (req, res) => {
     requireAdmin(req);
-    const to = req.body?.to || getSettings().owner_email;
+    const to = req.body?.to || (await getSettings()).owner_email;
     try {
-      const O = OWNER_STRINGS[getSettings().admin_language === 'en' ? 'en' : 'he'];
-      await sendEmail({ to, subject: O.testSubject, text: O.testBody, html: emailLayout({ lines: [O.testBody], dir: O === OWNER_STRINGS.he ? 'rtl' : 'ltr' }) });
+      const O = OWNER_STRINGS[(await getSettings()).admin_language === 'en' ? 'en' : 'he'];
+      await sendEmail({ to, subject: O.testSubject, text: O.testBody, html: await emailLayout({ lines: [O.testBody], dir: O === OWNER_STRINGS.he ? 'rtl' : 'ltr' }) });
     } catch (e) { throw userError(e.message, 502); }
     json(res, 200, { ok: true });
   });
 
   r.post('/api/admin/test/whatsapp', async (req, res) => {
     requireAdmin(req);
-    const to = req.body?.to || getSettings().owner_phone;
+    const to = req.body?.to || (await getSettings()).owner_phone;
     try {
-      const O = OWNER_STRINGS[getSettings().admin_language === 'en' ? 'en' : 'he'];
+      const O = OWNER_STRINGS[(await getSettings()).admin_language === 'en' ? 'en' : 'he'];
       await sendWhatsApp({ to, text: O.testWa, vars: ['Test', 'Test meeting', new Date().toLocaleString(), config.baseUrl] });
     } catch (e) { throw userError(e.message, 502); }
     json(res, 200, { ok: true });

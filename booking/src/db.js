@@ -1,13 +1,12 @@
+// Database layer. Two drivers with the same SQLite dialect:
+//  - local: a SQLite file via node:sqlite (your computer, tests)
+//  - remote: Turso / libSQL over HTTPS (Vercel and other serverless hosts), when TURSO_DATABASE_URL is set
+// All helpers are async so both drivers look the same to the rest of the app.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
 
-fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
-export const db = new DatabaseSync(config.dbPath);
-db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-
-db.exec(`
+const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 
 CREATE TABLE IF NOT EXISTS google_accounts (
@@ -121,31 +120,104 @@ CREATE TABLE IF NOT EXISTS transcripts (
   sent_at INTEGER,
   UNIQUE(source, external_id)
 );
-`);
+`;
 
-// ---- migrations (add columns to existing databases) ----
-function addColumn(table, col, def) {
-  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+function localDriver() {
+  let dbp;
+  const open = async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
+    const db = new DatabaseSync(config.dbPath);
+    db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+    return db;
+  };
+  const conn = () => (dbp ??= open());
+  return {
+    async all(sql, p) { return (await conn()).prepare(sql).all(...p); },
+    async get(sql, p) { return (await conn()).prepare(sql).get(...p); },
+    async run(sql, p) {
+      const r = (await conn()).prepare(sql).run(...p);
+      return { lastInsertRowid: Number(r.lastInsertRowid), changes: Number(r.changes) };
+    },
+    async exec(sql) { (await conn()).exec(sql); },
+  };
 }
-// Meeting types can offer several locations; the client picks one when there is more than one.
-addColumn('meeting_types', 'locations', "TEXT NOT NULL DEFAULT '[]'"); // [{type, value}] type: google_meet|zoom|phone|in_person|custom
-addColumn('bookings', 'location_type', 'TEXT');
-addColumn('bookings', 'zoom_meeting_id', 'TEXT');
-if (db.prepare('PRAGMA user_version').get().user_version < 1) {
-  // One-time: copy the old single location into the new list.
-  db.exec(`UPDATE meeting_types SET locations = json_array(json_object('type', location_type, 'value', COALESCE(location_value, '')))
-           WHERE locations = '[]' AND location_type <> 'none'; PRAGMA user_version = 1;`);
+
+function remoteDriver(url, token) {
+  const endpoint = `${url.replace(/^libsql:\/\//, 'https://').replace(/\/$/, '')}/v2/pipeline`;
+  const encode = (v) => {
+    if (v === null || v === undefined) return { type: 'null' };
+    if (typeof v === 'boolean') return { type: 'integer', value: v ? '1' : '0' };
+    if (typeof v === 'bigint') return { type: 'integer', value: v.toString() };
+    if (typeof v === 'number') return Number.isInteger(v) ? { type: 'integer', value: String(v) } : { type: 'float', value: v };
+    return { type: 'text', value: String(v) };
+  };
+  const decode = (c) => (c.type === 'null' ? null : c.type === 'integer' ? Number(c.value) : c.type === 'blob' ? Buffer.from(c.base64, 'base64') : c.value);
+  async function pipeline(stmts) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({
+        requests: [
+          { type: 'execute', stmt: { sql: 'PRAGMA foreign_keys = ON' } },
+          ...stmts.map(([sql, args]) => ({ type: 'execute', stmt: { sql, args: (args || []).map(encode) } })),
+          { type: 'close' },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`Database HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    return data.results.slice(1, stmts.length + 1).map((r) => {
+      if (r.type !== 'ok') throw new Error(`Database: ${r.error?.message || JSON.stringify(r)}`);
+      return r.response.result;
+    });
+  }
+  const rows = (result) => result.rows.map((row) => Object.fromEntries(result.cols.map((c, i) => [c.name, decode(row[i])])));
+  return {
+    async all(sql, p) { return rows((await pipeline([[sql, p]]))[0]); },
+    async get(sql, p) { return rows((await pipeline([[sql, p]]))[0])[0]; },
+    async run(sql, p) {
+      const [r] = await pipeline([[sql, p]]);
+      return { lastInsertRowid: Number(r.last_insert_rowid ?? 0), changes: Number(r.affected_row_count ?? 0) };
+    },
+    async exec(sql) { await pipeline(splitSql(sql).map((q) => [q, []])); },
+  };
 }
+
+const splitSql = (sql) => sql.split(/;\s*\n/).map((q) => q.trim()).filter(Boolean);
+
+const driver = config.turso.url ? remoteDriver(config.turso.url, config.turso.token) : localDriver();
+export const usingRemoteDb = Boolean(config.turso.url);
+
+// ---- schema + migrations, once per process (cold start) ----
+let ready;
+async function migrate() {
+  await driver.exec(SCHEMA);
+  // Columns added after the first version. Adding an existing column fails harmlessly.
+  for (const [table, col, def] of [
+    ['meeting_types', 'locations', "TEXT NOT NULL DEFAULT '[]'"], // [{type, value}] google_meet|zoom|phone|in_person|custom
+    ['bookings', 'location_type', 'TEXT'],
+    ['bookings', 'zoom_meeting_id', 'TEXT'],
+  ]) {
+    try { await driver.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`, []); } catch (e) {
+      if (!/duplicate column/i.test(e.message)) throw e;
+    }
+  }
+  if (!(await driver.get("SELECT 1 AS x FROM settings WHERE key='_migration_locations'", []))) {
+    // One-time: copy the old single location into the new list.
+    await driver.run(`UPDATE meeting_types SET locations = json_array(json_object('type', location_type, 'value', COALESCE(location_value, '')))
+                      WHERE locations = '[]' AND location_type <> 'none'`, []);
+    await driver.run("INSERT OR IGNORE INTO settings(key, value) VALUES('_migration_locations', '1')", []);
+  }
+  await seed();
+}
+const ensureReady = () => (ready ??= migrate().catch((e) => { ready = null; throw e; }));
+export const initDb = ensureReady;
 
 // ---- helpers ----
-export const all = (sql, ...p) => db.prepare(sql).all(...p);
-export const get = (sql, ...p) => db.prepare(sql).get(...p);
-export const run = (sql, ...p) => db.prepare(sql).run(...p);
-
-export function tx(fn) {
-  db.exec('BEGIN IMMEDIATE');
-  try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; }
-}
+export async function all(sql, ...p) { await ensureReady(); return driver.all(sql, p); }
+export async function get(sql, ...p) { await ensureReady(); return driver.get(sql, p); }
+export async function run(sql, ...p) { await ensureReady(); return driver.run(sql, p); }
 
 const SETTING_DEFAULTS = {
   owner_name: '',
@@ -159,16 +231,16 @@ const SETTING_DEFAULTS = {
   welcome_text: '',
 };
 
-export function getSettings() {
+export async function getSettings() {
   const out = { ...SETTING_DEFAULTS };
-  for (const r of all('SELECT key, value FROM settings')) out[r.key] = r.value;
+  for (const r of await all('SELECT key, value FROM settings')) if (r.key in SETTING_DEFAULTS) out[r.key] = r.value;
   return out;
 }
 
-export function setSettings(obj) {
+export async function setSettings(obj) {
   for (const [k, v] of Object.entries(obj)) {
     if (!(k in SETTING_DEFAULTS)) continue;
-    run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', k, String(v ?? ''));
+    await run('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', k, String(v ?? ''));
   }
 }
 
@@ -183,4 +255,20 @@ export function parseRow(table, row) {
   const r = { ...row };
   for (const c of JSON_COLS[table] || []) if (typeof r[c] === 'string') r[c] = JSON.parse(r[c]);
   return r;
+}
+
+
+// Seed a first meeting type so the booking page isn't empty on first run.
+async function seed() {
+  if (await driver.get('SELECT 1 AS x FROM meeting_types LIMIT 1', [])) return;
+  const weekdays = { 0: [[540, 1020]], 1: [[540, 1020]], 2: [[540, 1020]], 3: [[540, 1020]], 4: [[540, 1020]], 5: [], 6: [] };
+  const langRow = await driver.get("SELECT value FROM settings WHERE key='language'", []);
+  const he = (langRow?.value || SETTING_DEFAULTS.language) === 'he';
+  await driver.run(`INSERT INTO meeting_types(slug, name, description, durations, schedule, buffer_after, fields, created_at, locations)
+       VALUES(?,?,?,?,?,?,?,?,'[{"type":"google_meet","value":""}]')`, ['intro',
+    he ? 'שיחת היכרות' : 'Intro call',
+    he ? 'שיחה קצרה כדי להכיר.' : 'A short call to get to know each other.', '[30]',
+    JSON.stringify(weekdays), 15,
+    JSON.stringify([{ id: 'topic', label: he ? 'על מה תרצו לדבר?' : 'What would you like to talk about?', type: 'textarea', required: false, placeholder: '', options: [] }]),
+    Date.now()]);
 }

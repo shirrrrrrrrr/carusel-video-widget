@@ -6,6 +6,11 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { startHranaMock } from './hrana-mock.js';
+
+// E2E_REMOTE=1 runs the same suite against the Turso (remote) database driver.
+const REMOTE = process.env.E2E_REMOTE === '1';
+let hrana;
 
 const PORT = 3900 + Math.floor(Math.random() * 90);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -28,13 +33,18 @@ before(async () => {
     let b = ''; req.on('data', (c) => b += c);
     req.on('end', () => { summaryRequests.push(JSON.parse(b)); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ summary: 'SUMMARY: we agreed on next steps.' })); });
   }).listen(PORT + 100);
+  const dbEnv = {};
+  if (REMOTE) {
+    hrana = await startHranaMock({ port: PORT + 200, token: 'test-token' });
+    Object.assign(dbEnv, { TURSO_DATABASE_URL: `http://127.0.0.1:${PORT + 200}`, TURSO_AUTH_TOKEN: 'test-token' });
+  }
   server = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'src/server.js'], {
     cwd: path.resolve(import.meta.dirname, '..'),
     env: {
       ...process.env, PORT: String(PORT), BASE_URL: BASE, ADMIN_PASSWORD: 'secret-pass', APP_SECRET: 'x'.repeat(40),
       DB_PATH: path.join(tmp, 'test.db'), EMAIL_PROVIDER: 'none', WHATSAPP_PROVIDER: 'none',
       TRANSCRIPT_WEBHOOK_SECRET: 'hook-key', SUMMARY_API_URL: `http://127.0.0.1:${PORT + 100}/summarize`,
-      GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
+      GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '', ...dbEnv,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -45,7 +55,7 @@ before(async () => {
   });
 });
 
-after(() => { server?.kill(); summaryServer?.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
+after(() => { server?.kill(); summaryServer?.close(); hrana?.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 test('pages render', async () => {
   for (const p of ['/', '/book/intro', '/admin', '/manage/abc']) {
@@ -243,4 +253,15 @@ test('errors are translated to Hebrew (default language)', async () => {
   assert.equal(st2.data.settings.admin_language, 'en');
   assert.equal(st2.data.settings.language, 'he');
   assert.equal((await call('/api/admin/login', { method: 'POST', body: { password: 'nope' } })).data.error, 'Wrong password');
+});
+
+test('Vercel-style rewritten path and cron endpoint', async () => {
+  const r = await call('/api?__path=/api/public/types/intro');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.slug, 'intro');
+  const page = await fetch(`${BASE}/api?__path=/book/intro`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /book\.js/);
+  // Locally (not serverless, no CRON_SECRET) the cron endpoint is open; it just processes due reminders.
+  assert.equal((await call('/api/cron/reminders')).status, 200);
 });
