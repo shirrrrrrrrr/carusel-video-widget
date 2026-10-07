@@ -1,4 +1,5 @@
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import fs from 'node:fs';
 import { assertConfig, config, ROOT } from './config.js';
@@ -76,17 +77,34 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.on('error', (e) => {
-  if (e.code === 'EADDRINUSE') {
-    console.error(`\n❌ Port ${config.port} is already in use by another program.`);
-    console.error('   Pick another port: open the .env file and change PORT=5000 (and BASE_URL) to e.g. 5050, then run npm start again.');
-    if (config.port === 5000 && process.platform === 'darwin') {
-      console.error('   On a Mac, port 5000 is often used by AirPlay Receiver (System Settings → General → AirDrop & Handoff → AirPlay Receiver).');
-    }
-    process.exit(1);
+function portTakenMessage() {
+  console.error(`\n❌ Port ${config.port} is already in use by another program.`);
+  if (process.platform === 'darwin' && config.port === 5000) {
+    console.error('   On a Mac, port 5000 is used by AirPlay Receiver.');
   }
+  console.error(`   Start on another port instead, for example:  PORT=5051 npm start`);
+  console.error('   (or change PORT in the .env file)\n');
+  process.exit(1);
+}
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') portTakenMessage();
   throw e;
 });
+
+// Some programs (e.g. AirPlay on macOS) share the port in a way that still lets us bind,
+// but the browser would reach them instead of us — so check that nobody answers first.
+function portAnswers(host) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port: config.port, host });
+    sock.setTimeout(500);
+    sock.once('connect', () => { sock.destroy(); resolve(true); });
+    sock.once('timeout', () => { sock.destroy(); resolve(false); });
+    sock.once('error', () => resolve(false));
+  });
+}
+const taken = (await Promise.all(['127.0.0.1', '::1'].map(portAnswers))).some(Boolean);
+if (taken) portTakenMessage();
 
 server.listen(config.port, () => {
   console.log(`Booking system running at ${config.baseUrl} (port ${config.port})`);

@@ -33,9 +33,16 @@ loadEnvFile(path.join(ROOT, '.env'));
 
 const env = (k, d = '') => process.env[k] ?? d;
 
+// On your own computer the address always follows PORT, so changing the port never breaks links.
+function localBaseUrl(base, port) {
+  if (!base) return `http://localhost:${port}`;
+  const u = base.replace(/\/$/, '');
+  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(u) ? u.replace(/(:\d+)?$/, `:${port}`) : u;
+}
+
 export const config = {
-  port: Number(env('PORT', '5000')),
-  baseUrl: env('BASE_URL', `http://localhost:${env('PORT', '5000')}`).replace(/\/$/, ''),
+  port: Number(env('PORT', '5050')),
+  baseUrl: localBaseUrl(env('BASE_URL', ''), env('PORT', '5050')),
   adminPassword: env('ADMIN_PASSWORD'),
   appSecret: env('APP_SECRET'),
   dbPath: path.resolve(ROOT, env('DB_PATH', './data/booking.db')),
