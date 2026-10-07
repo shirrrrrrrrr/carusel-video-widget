@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,13 +16,26 @@ function loadEnvFile(file) {
     process.env[m[1]] = v;
   }
 }
+// First run: create .env from the example with a random secret and admin password, so it starts with zero setup.
+function ensureEnvFile(file) {
+  if (fs.existsSync(file) || process.env.ADMIN_PASSWORD) return;
+  const example = path.join(ROOT, '.env.example');
+  if (!fs.existsSync(example)) return;
+  const password = crypto.randomBytes(6).toString('base64url');
+  const content = fs.readFileSync(example, 'utf8')
+    .replace(/^ADMIN_PASSWORD=.*$/m, `ADMIN_PASSWORD=${password}`)
+    .replace(/^APP_SECRET=.*$/m, `APP_SECRET=${crypto.randomBytes(32).toString('hex')}`);
+  fs.writeFileSync(file, content, { mode: 0o600 });
+  console.log(`\n✅ Created ${file}\n   Dashboard password: ${password}\n   (you can change it in the .env file)\n`);
+}
+ensureEnvFile(path.join(ROOT, '.env'));
 loadEnvFile(path.join(ROOT, '.env'));
 
 const env = (k, d = '') => process.env[k] ?? d;
 
 export const config = {
   port: Number(env('PORT', '3000')),
-  baseUrl: env('BASE_URL', 'http://localhost:3000').replace(/\/$/, ''),
+  baseUrl: env('BASE_URL', `http://localhost:${env('PORT', '3000')}`).replace(/\/$/, ''),
   adminPassword: env('ADMIN_PASSWORD'),
   appSecret: env('APP_SECRET'),
   dbPath: path.resolve(ROOT, env('DB_PATH', './data/booking.db')),
