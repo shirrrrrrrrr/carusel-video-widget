@@ -76,6 +76,18 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${config.port} is already in use by another program.`);
+    console.error('   Pick another port: open the .env file and change PORT=5000 (and BASE_URL) to e.g. 5050, then run npm start again.');
+    if (config.port === 5000 && process.platform === 'darwin') {
+      console.error('   On a Mac, port 5000 is often used by AirPlay Receiver (System Settings → General → AirDrop & Handoff → AirPlay Receiver).');
+    }
+    process.exit(1);
+  }
+  throw e;
+});
+
 server.listen(config.port, () => {
   console.log(`Booking system running at ${config.baseUrl} (port ${config.port})`);
   console.log(`  Booking page: ${config.baseUrl}/`);

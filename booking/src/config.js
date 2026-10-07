@@ -34,8 +34,8 @@ loadEnvFile(path.join(ROOT, '.env'));
 const env = (k, d = '') => process.env[k] ?? d;
 
 export const config = {
-  port: Number(env('PORT', '3000')),
-  baseUrl: env('BASE_URL', `http://localhost:${env('PORT', '3000')}`).replace(/\/$/, ''),
+  port: Number(env('PORT', '5000')),
+  baseUrl: env('BASE_URL', `http://localhost:${env('PORT', '5000')}`).replace(/\/$/, ''),
   adminPassword: env('ADMIN_PASSWORD'),
   appSecret: env('APP_SECRET'),
   dbPath: path.resolve(ROOT, env('DB_PATH', './data/booking.db')),

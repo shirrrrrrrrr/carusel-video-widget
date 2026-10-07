@@ -26,7 +26,7 @@ No npm packages: it runs on Node.js ≥ 22.5 alone (built-in HTTP server and SQL
 ```bash
 cd booking
 cp .env.example .env          # then fill it in (see below)
-npm start                     # http://localhost:3000  ·  dashboard: /admin
+npm start                     # http://localhost:5000  ·  dashboard: /admin
 npm test                      # unit + end-to-end tests
 ```
 
